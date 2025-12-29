@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:5096';
+const API_BASE = '';
 
 interface ApiSuccess<T> {
   success: true;

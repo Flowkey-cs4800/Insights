@@ -1,6 +1,12 @@
+using Microsoft.EntityFrameworkCore;
+using Insights.Server.Data;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Database
+builder.Services.AddDbContext<InsightsContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Services
 builder.Services.AddEndpointsApiExplorer();

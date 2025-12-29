@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Insights.Server.Data;
 using Insights.Server.Routes;
@@ -61,6 +62,12 @@ builder.Services.AddCors(options =>
 });
 
 var app = builder.Build();
+
+// Handle forwarded headers from Render's load balancer
+app.UseForwardedHeaders(new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedProto
+});
 
 // Middleware
 if (app.Environment.IsDevelopment())

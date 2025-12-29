@@ -37,9 +37,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors();
+app.UseStaticFiles();
 
 // Health check endpoint
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy" }))
    .WithTags("Health");
+
+// Fallback to index.html for SPA routing
+app.MapFallbackToFile("index.html");
 
 app.Run();

@@ -1,39 +1,19 @@
-import { useEffect, useState } from 'react';
-import { Button, Container, Typography, Box } from '@mui/material';
-import { callApi } from './services/apiService';
+import { Button, Container, Typography, Box, CircularProgress } from '@mui/material';
+import { useAuth } from './hooks/useAuth';
+import { login, logout } from './services/auth-service';
 
 function App() {
-  const [health, setHealth] = useState<string>('checking...');
+  const { user, loading } = useAuth();
 
-  useEffect(() => {
-    let ignore = false;
-
-    async function fetchHealth() {
-      const result = await callApi<{ status: string }>('/api/health');
-      if (!ignore) {
-        if (result.success) {
-          setHealth(result.data.status);
-        } else {
-          setHealth(`Error: ${result.error}`);
-        }
-      }
-    }
-
-    fetchHealth();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
-  const checkHealth = async () => {
-    const result = await callApi<{ status: string }>('/api/health');
-    if (result.success) {
-      setHealth(result.data.status);
-    } else {
-      setHealth(`Error: ${result.error}`);
-    }
-  };
+  if (loading) {
+    return (
+      <Container maxWidth="sm">
+        <Box sx={{ mt: 8, textAlign: 'center' }}>
+          <CircularProgress />
+        </Box>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="sm">
@@ -41,12 +21,29 @@ function App() {
         <Typography variant="h3" gutterBottom>
           Insights
         </Typography>
-        <Typography variant="body1" color="text.secondary" gutterBottom>
-          Server status: {health}
-        </Typography>
-        <Button variant="contained" onClick={checkHealth}>
-          Check Again
-        </Button>
+        
+        {user ? (
+          <>
+            <Typography variant="body1" gutterBottom>
+              Welcome, {user.name}!
+            </Typography>
+            <Typography variant="body2" color="text.secondary" gutterBottom>
+              {user.email}
+            </Typography>
+            <Button variant="outlined" onClick={() => logout()} sx={{ mt: 2 }}>
+              Sign Out
+            </Button>
+          </>
+        ) : (
+          <>
+            <Typography variant="body1" color="text.secondary" gutterBottom>
+              Track your habits and discover correlations
+            </Typography>
+            <Button variant="contained" onClick={() => login()} sx={{ mt: 2 }}>
+              Sign in with Google
+            </Button>
+          </>
+        )}
       </Box>
     </Container>
   );

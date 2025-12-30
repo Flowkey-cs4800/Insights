@@ -70,14 +70,13 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
 });
 
 // Middleware
-if (app.Environment.IsDevelopment())
+
+// API docs
+app.UseSwagger(options =>
 {
-    app.UseSwagger(options =>
-    {
-        options.RouteTemplate = "/openapi/{documentName}.json";
-    });
-    app.MapScalarApiReference();
-}
+    options.RouteTemplate = "/openapi/{documentName}.json";
+});
+app.MapScalarApiReference();
 
 app.UseCors();
 app.UseAuthentication();

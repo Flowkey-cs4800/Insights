@@ -9,11 +9,13 @@ namespace Insights.Server.Routes;
 
 public static class AuthRoutes
 {
+    public record UserResponse(Guid UserId, string Email, string Name);
+    public record LogoutResponse(string Message);
+
     public static void MapAuthRoutes(this WebApplication app)
     {
         var auth = app.MapGroup("/api/auth").WithTags("Auth");
 
-        // Initiate Google login
         auth.MapGet("/login", (string? returnUrl, IWebHostEnvironment env) =>
         {
             var defaultRedirect = env.IsDevelopment() 
@@ -25,9 +27,11 @@ public static class AuthRoutes
                 RedirectUri = returnUrl ?? defaultRedirect
             };
             return Results.Challenge(properties, [GoogleDefaults.AuthenticationScheme]);
-        });
+        })
+        .WithSummary("Start Google OAuth login")
+        .WithDescription("Redirects to Google sign-in. After auth, redirects to returnUrl or home.")
+        .Produces(302);
 
-        // Get current user
         auth.MapGet("/me", async (HttpContext context, InsightsContext db) =>
         {
             if (!context.User.Identity?.IsAuthenticated ?? true)
@@ -44,7 +48,6 @@ public static class AuthRoutes
                 return Results.Unauthorized();
             }
 
-            // Find or create user
             var user = await db.Users.FirstOrDefaultAsync(u => u.GoogleId == googleId);
             if (user == null)
             {
@@ -59,19 +62,20 @@ public static class AuthRoutes
                 await db.SaveChangesAsync();
             }
 
-            return Results.Ok(new
-            {
-                user.UserId,
-                user.Email,
-                user.Name
-            });
-        });
+            return Results.Ok(new UserResponse(user.UserId, user.Email, user.Name));
+        })
+        .WithSummary("Get current user")
+        .WithDescription("Returns the logged-in user's info. Creates user in DB on first login.")
+        .Produces<UserResponse>(200)
+        .Produces(401);
 
-        // Logout
         auth.MapPost("/logout", async (HttpContext context) =>
         {
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return Results.Ok(new { message = "Logged out" });
-        });
+            return Results.Ok(new LogoutResponse("Logged out"));
+        })
+        .WithSummary("Log out")
+        .WithDescription("Clears the auth cookie and ends the session.")
+        .Produces<LogoutResponse>(200);
     }
 }

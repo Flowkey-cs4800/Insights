@@ -85,7 +85,10 @@ app.UseStaticFiles();
 
 // Routes
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy" }))
-   .WithTags("Health");
+    .WithTags("Health")
+    .WithSummary("Health check")
+    .WithDescription("Returns server status. Use to verify the API is running.")
+    .Produces<object>(200);
 
 app.MapAuthRoutes();
 

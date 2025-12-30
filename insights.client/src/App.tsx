@@ -1,6 +1,7 @@
 import { Button, Container, Typography, Box, CircularProgress } from '@mui/material';
 import { useAuth } from './hooks/useAuth';
 import { login, logout } from './services/auth-service';
+import StatCard from './components/StatCard';
 
 function App() {
   const { user, loading } = useAuth();
@@ -27,10 +28,13 @@ function App() {
             <Typography variant="body1" gutterBottom>
               Welcome, {user.name}!
             </Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              {user.email}
-            </Typography>
-            <Button variant="outlined" onClick={() => logout()} sx={{ mt: 2 }}>
+            
+            <Box sx={{ display: 'flex', gap: 2, mt: 4, mb: 4 }}>
+              <StatCard title="Entries" value={0} subtitle="this week" />
+              <StatCard title="Streak" value={0} subtitle="days" />
+            </Box>
+
+            <Button variant="outlined" onClick={() => logout()}>
               Sign Out
             </Button>
           </>

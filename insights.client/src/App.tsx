@@ -35,7 +35,7 @@ function App() {
             </Box>
 
             <Button variant="outlined" onClick={() => logout()}>
-              Sign Out
+              Sign Outsadfasdfasdf
             </Button>
           </>
         ) : (

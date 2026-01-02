@@ -91,6 +91,7 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "healthy" }))
     .Produces<object>(200);
 
 app.MapAuthRoutes();
+app.MapMetricRoutes();
 
 // Fallback to index.html for SPA routing
 app.MapFallbackToFile("index.html");

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.EntityFrameworkCore;
 using Insights.Server.Data;
 using Insights.Server.Entities;
+using System.Security.Claims;
 
 namespace Insights.Server.Routes;
 
@@ -16,6 +17,7 @@ public static class AuthRoutes
     {
         var auth = app.MapGroup("/api/auth").WithTags("Auth");
 
+        // Login endpoint - initiates Google OAuth flow
         auth.MapGet("/login", (string? returnUrl, IWebHostEnvironment env) =>
         {
             var defaultRedirect = env.IsDevelopment() 
@@ -32,6 +34,8 @@ public static class AuthRoutes
         .WithDescription("Redirects to Google sign-in. After auth, redirects to returnUrl or home.")
         .Produces(302);
 
+
+        // Get current user info
         auth.MapGet("/me", async (HttpContext context, InsightsContext db) =>
         {
             if (!context.User.Identity?.IsAuthenticated ?? true)
@@ -39,11 +43,19 @@ public static class AuthRoutes
                 return Results.Unauthorized();
             }
 
-            var googleId = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
-            var email = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
-            var name = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")?.Value;
+            var existingUserId = context.User.FindFirst("UserId")?.Value;
+            if (existingUserId is not null)
+            {
+                var email = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
+                var name = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")?.Value;
+                return Results.Ok(new UserResponse(Guid.Parse(existingUserId), email ?? "", name ?? ""));
+            }
 
-            if (string.IsNullOrEmpty(googleId) || string.IsNullOrEmpty(email))
+            var googleId = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+            var userEmail = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")?.Value;
+            var userName = context.User.FindFirst("http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")?.Value;
+
+            if (string.IsNullOrEmpty(googleId) || string.IsNullOrEmpty(userEmail))
             {
                 return Results.Unauthorized();
             }
@@ -55,12 +67,21 @@ public static class AuthRoutes
                 {
                     UserId = Guid.NewGuid(),
                     GoogleId = googleId,
-                    Email = email,
-                    Name = name ?? email
+                    Email = userEmail,
+                    Name = userName ?? userEmail
                 };
                 db.Users.Add(user);
                 await db.SaveChangesAsync();
             }
+
+            var claims = new List<Claim>(context.User.Claims)
+            {
+                new("UserId", user.UserId.ToString())
+            };
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var principal = new ClaimsPrincipal(identity);
+            
+            await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
             return Results.Ok(new UserResponse(user.UserId, user.Email, user.Name));
         })

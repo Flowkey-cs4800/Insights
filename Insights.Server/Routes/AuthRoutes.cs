@@ -80,7 +80,7 @@ public static class AuthRoutes
             };
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             var principal = new ClaimsPrincipal(identity);
-            
+
             await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
 
             return Results.Ok(new UserResponse(user.UserId, user.Email, user.Name));

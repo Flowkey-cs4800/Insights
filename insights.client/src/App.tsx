@@ -1,56 +1,20 @@
-import { Button, Container, Typography, Box, CircularProgress } from '@mui/material';
+import { CircularProgress, Box } from '@mui/material';
 import { useAuth } from './hooks/useAuth';
-import { login, logout } from './services/auth-service';
-import StatCard from './components/StatCard';
+import Home from './pages/Home';
+import Landing from './pages/Landing';
 
 function App() {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <Container maxWidth="sm">
-        <Box sx={{ mt: 8, textAlign: 'center' }}>
-          <CircularProgress />
-        </Box>
-      </Container>
+      <Box sx={{ mt: 8, textAlign: 'center' }}>
+        <CircularProgress />
+      </Box>
     );
   }
 
-  return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, textAlign: 'center' }}>
-        <Typography variant="h3" gutterBottom>
-          Insights
-        </Typography>
-        
-        {user ? (
-          <>
-            <Typography variant="body1" gutterBottom>
-              Welcome, {user.name}!
-            </Typography>
-            
-            <Box sx={{ display: 'flex', gap: 2, mt: 4, mb: 4 }}>
-              <StatCard title="Entries" value={0} subtitle="this week" />
-              <StatCard title="Streak" value={0} subtitle="days" />
-            </Box>
-
-            <Button variant="outlined" onClick={() => logout()}>
-              Sign Outsadfasdfasdf
-            </Button>
-          </>
-        ) : (
-          <>
-            <Typography variant="body1" color="text.secondary" gutterBottom>
-              Track your habits and discover correlations
-            </Typography>
-            <Button variant="contained" onClick={() => login()} sx={{ mt: 2 }}>
-              Sign in with Google
-            </Button>
-          </>
-        )}
-      </Box>
-    </Container>
-  );
+  return user ? <Home /> : <Landing />;
 }
 
 export default App;

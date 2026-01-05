@@ -8,8 +8,8 @@ namespace Insights.Server.Routes;
 public static class MetricRoutes
 {
     // --- DTOs ---
-    public record MetricTypeResponse(Guid MetricTypeId, string Name, bool IsDuration);
-    public record MetricTypeRequest(string Name, bool IsDuration);
+    public record MetricTypeResponse(Guid MetricTypeId, string Name, MetricKind Kind, string? Unit);
+    public record MetricTypeRequest(string Name, MetricKind Kind, string? Unit);
     
     public record MetricResponse(Guid MetricId, Guid MetricTypeId, string MetricTypeName, DateOnly Date, int Value);
     public record MetricRequest(Guid MetricTypeId, DateOnly Date, int Value);
@@ -31,7 +31,7 @@ public static class MetricRoutes
             var metricTypes = await db.MetricTypes
                 .Where(mt => mt.UserId == userId)
                 .OrderBy(mt => mt.Name)
-                .Select(mt => new MetricTypeResponse(mt.MetricTypeId, mt.Name, mt.IsDuration))
+                .Select(mt => new MetricTypeResponse(mt.MetricTypeId, mt.Name, mt.Kind, mt.Unit))
                 .ToListAsync();
 
             return Results.Ok(metricTypes);
@@ -52,14 +52,15 @@ public static class MetricRoutes
                 MetricTypeId = Guid.NewGuid(),
                 UserId = userId.Value,
                 Name = request.Name,
-                IsDuration = request.IsDuration
+                Kind = request.Kind,
+                Unit = request.Unit
             };
 
             db.MetricTypes.Add(metricType);
             await db.SaveChangesAsync();
 
             return Results.Created($"/api/metric-types/{metricType.MetricTypeId}",
-                new MetricTypeResponse(metricType.MetricTypeId, metricType.Name, metricType.IsDuration));
+                new MetricTypeResponse(metricType.MetricTypeId, metricType.Name, metricType.Kind, metricType.Unit));
         })
         .WithSummary("Create metric type")
         .WithDescription("Creates a new metric type. IsDuration=true for time-based metrics (stored as minutes), false for counts/scales.")
@@ -79,10 +80,11 @@ public static class MetricRoutes
             if (metricType is null) return Results.NotFound();
 
             metricType.Name = request.Name;
-            metricType.IsDuration = request.IsDuration;
+            metricType.Kind = request.Kind;
+            metricType.Unit = request.Unit;
             await db.SaveChangesAsync();
 
-            return Results.Ok(new MetricTypeResponse(metricType.MetricTypeId, metricType.Name, metricType.IsDuration));
+            return Results.Ok(new MetricTypeResponse(metricType.MetricTypeId, metricType.Name, metricType.Kind, metricType.Unit));
         })
         .WithSummary("Update metric type")
         .WithDescription("Updates an existing metric type's name or duration setting.")

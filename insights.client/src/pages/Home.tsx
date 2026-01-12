@@ -4,11 +4,16 @@ import {
   Button,
   Checkbox,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Divider,
   IconButton,
   LinearProgress,
   Paper,
   Stack,
+  TextField,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
@@ -18,16 +23,14 @@ import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import TodayIcon from "@mui/icons-material/Today";
 import { useNavigate } from "react-router-dom";
 
-import InlineStepper from "../components/InlineStepper";
-
 import {
   getMetricTypes,
   getMetrics,
   logMetric,
   deleteMetric,
-  updateMetric,
   type MetricType,
   type Metric,
+  type GoalCadence,
 } from "../services/metricService";
 
 function isoDate(d: Date) {
@@ -46,53 +49,59 @@ function daysInMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 }
 
+const cadenceLabel = (c: GoalCadence) => (c === 0 ? "Daily" : "Weekly");
+
+type LogDialogState = {
+  open: boolean;
+  metricType: MetricType | null;
+  date: string;
+  value: string;
+};
+
 export default function Home() {
   const navigate = useNavigate();
 
   const [metricTypes, setMetricTypes] = useState<MetricType[]>([]);
   const [metrics, setMetrics] = useState<Metric[]>([]);
 
-  // Only show loading on first mount
   const [initialLoading, setInitialLoading] = useState(true);
-
-  // Per-row busy flags so UI doesn’t “reload”
-  const [busyByKey, setBusyByKey] = useState<Record<string, boolean>>({});
-
+  const [mutatingKey, setMutatingKey] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  const [logDialog, setLogDialog] = useState<LogDialogState>({
+    open: false,
+    metricType: null,
+    date: isoDate(new Date()),
+    value: "",
+  });
+
+  const upsertMetricInState = (metric: Metric) => {
+    setMetrics((prev) => {
+      const next = [...prev];
+      const idx = next.findIndex((m) => m.metricId === metric.metricId);
+
+      if (idx >= 0) {
+        next[idx] = metric;
+        return next;
+      }
+
+      const dateKey = metric.date.slice(0, 10);
+      const filtered = next.filter(
+        (m) => !(m.metricTypeId === metric.metricTypeId && m.date.slice(0, 10) === dateKey)
+      );
+
+      return [metric, ...filtered];
+    });
+  };
+
+  const removeMetricFromState = (metricId: string) => {
+    setMetrics((prev) => prev.filter((m) => m.metricId !== metricId));
+  };
 
   const today = useMemo(() => isoDate(new Date()), []);
   const monthStart = useMemo(() => isoDate(startOfMonth(new Date())), []);
   const monthEnd = useMemo(() => isoDate(endOfMonth(new Date())), []);
   const dim = useMemo(() => daysInMonth(new Date()), []);
-
-  const setBusy = (key: string, v: boolean) =>
-    setBusyByKey((prev) => ({ ...prev, [key]: v }));
-
-  // Upsert by (metricTypeId + date) (not by metricId) so local UI stays consistent
-  const upsertMetric = (next: Metric) => {
-    const nextDate = next.date?.slice(0, 10);
-    setMetrics((prev) => {
-      const idx = prev.findIndex(
-        (m) => m.metricTypeId === next.metricTypeId && m.date?.slice(0, 10) === nextDate
-      );
-      if (idx === -1) return [next, ...prev];
-      const copy = prev.slice();
-      copy[idx] = next;
-      return copy;
-    });
-  };
-
-  const removeMetricById = (metricId: string) => {
-    setMetrics((prev) => prev.filter((m) => m.metricId !== metricId));
-  };
-
-  const removeMetricByTypeAndDate = (metricTypeId: string, dateYYYYMMDD: string) => {
-    setMetrics((prev) =>
-      prev.filter(
-        (m) => !(m.metricTypeId === metricTypeId && m.date?.slice(0, 10) === dateYYYYMMDD)
-      )
-    );
-  };
 
   const refresh = async (opts?: { showLoading?: boolean }) => {
     const showLoading = opts?.showLoading ?? false;
@@ -151,7 +160,8 @@ export default function Home() {
     return done / metricTypes.length;
   }, [metricTypes, todayChecked]);
 
-  const weeklyGoals = useMemo(() => {
+  // NEW: goals-based progress (daily or weekly) based on each metric type’s goal fields
+  const goalCards = useMemo(() => {
     const now = new Date();
     const day = now.getDay();
     const diffToMon = (day + 6) % 7;
@@ -160,30 +170,75 @@ export default function Home() {
     const sun = new Date(mon);
     sun.setDate(mon.getDate() + 6);
 
-    const from = isoDate(mon);
-    const to = isoDate(sun);
+    const weekFrom = isoDate(mon);
+    const weekTo = isoDate(sun);
 
-    const counts = new Map<string, Set<string>>();
-    for (const mt of metricTypes) counts.set(mt.metricTypeId, new Set());
+    // Precompute: weekly sums and weekly boolean days
+    const weeklyValueSum = new Map<string, number>(); // metricTypeId -> sum(value)
+    const weeklyDaysDone = new Map<string, Set<string>>(); // metricTypeId -> set of dates
+
+    for (const mt of metricTypes) {
+      weeklyValueSum.set(mt.metricTypeId, 0);
+      weeklyDaysDone.set(mt.metricTypeId, new Set());
+    }
 
     for (const m of metrics) {
       const d = m.date?.slice(0, 10);
       if (!d) continue;
-      if (d < from || d > to) continue;
-      counts.get(m.metricTypeId)?.add(d);
+      if (d < weekFrom || d > weekTo) continue;
+
+      weeklyValueSum.set(m.metricTypeId, (weeklyValueSum.get(m.metricTypeId) ?? 0) + (m.value ?? 0));
+      weeklyDaysDone.get(m.metricTypeId)?.add(d);
     }
 
-    return metricTypes.slice(0, 3).map((mt) => {
-      const activeDays = counts.get(mt.metricTypeId)?.size ?? 0;
-      const goalDays = 5;
+    // Build cards for metric types that actually have a goalValue > 0
+    const withGoals = metricTypes.filter((mt) => (mt.goalValue ?? 0) > 0);
+
+    // Prefer showing up to 3 cards (same UX as before)
+    return withGoals.slice(0, 3).map((mt) => {
+      const goal = mt.goalValue ?? 0;
+      const cadence = mt.goalCadence;
+
+      let current = 0;
+      let meta = "";
+      let progress = 0;
+
+      if (cadence === 0) {
+        // Daily cadence uses today only
+        const todayMetric = metricByTypeAndDate.get(`${mt.metricTypeId}|${today}`);
+        if (mt.kind === "Boolean") {
+          current = todayMetric ? 1 : 0;
+          progress = goal > 0 ? Math.min(1, current / goal) : 0;
+          meta = `${current}/${goal} today`;
+        } else {
+          current = todayMetric?.value ?? 0;
+          progress = goal > 0 ? Math.min(1, current / goal) : 0;
+          meta = `${current}/${goal} today`;
+        }
+      } else {
+        // Weekly cadence uses Mon–Sun
+        if (mt.kind === "Boolean") {
+          const days = weeklyDaysDone.get(mt.metricTypeId)?.size ?? 0;
+          current = days;
+          progress = goal > 0 ? Math.min(1, current / goal) : 0;
+          meta = `${current}/${goal} days`;
+        } else {
+          const sum = weeklyValueSum.get(mt.metricTypeId) ?? 0;
+          current = sum;
+          progress = goal > 0 ? Math.min(1, current / goal) : 0;
+          meta = `${current}/${goal} ${mt.unit ?? ""}`.trim();
+        }
+      }
+
       return {
         id: mt.metricTypeId,
         label: mt.name,
-        progress: Math.min(1, activeDays / goalDays),
-        meta: `${activeDays}/${goalDays} days`,
+        cadenceLabel: cadenceLabel(cadence),
+        progress,
+        meta,
       };
     });
-  }, [metricTypes, metrics]);
+  }, [metricTypes, metrics, metricByTypeAndDate, today]);
 
   const monthlyGrids = useMemo(() => {
     return metricTypes.map((mt) => {
@@ -196,91 +251,65 @@ export default function Home() {
     });
   }, [metricTypes, dim, monthStart, metricByTypeAndDate]);
 
-  // --- Smooth mutations (no refresh) ---
-
   const toggleBooleanToday = async (mt: MetricType) => {
     const key = `${mt.metricTypeId}|${today}`;
-    if (busyByKey[key]) return;
-
+    setMutatingKey(key);
     setErr(null);
-    setBusy(key, true);
 
     const existing = metricByTypeAndDate.get(key);
 
-    try {
-      if (existing) {
-        // optimistic remove
-        removeMetricById(existing.metricId);
+    if (existing) {
+      removeMetricFromState(existing.metricId);
 
-        const del = await deleteMetric(existing.metricId);
-        if (!del.success) {
-          // rollback
-          upsertMetric(existing);
-          setErr(del.error);
-        }
-        return;
+      const del = await deleteMetric(existing.metricId);
+      if (!del.success) {
+        upsertMetricInState(existing);
+        setErr(del.error);
       }
-
-      const created = await logMetric(mt.metricTypeId, today, 1);
-      if (!created.success) {
-        setErr(created.error);
-        return;
-      }
-
-      upsertMetric(created.data);
-    } finally {
-      setBusy(key, false);
+      setMutatingKey(null);
+      return;
     }
+
+    const created = await logMetric(mt.metricTypeId, today, 1);
+    if (!created.success) {
+      setErr(created.error);
+      setMutatingKey(null);
+      return;
+    }
+
+    upsertMetricInState(created.data);
+    setMutatingKey(null);
   };
 
-  // Number/Duration: absolute set (InlineStepper calls this)
-  const setTodayValueAbsolute = async (mt: MetricType, nextValueRaw: number) => {
-    const key = `${mt.metricTypeId}|${today}`;
-    if (busyByKey[key]) return;
+  const openLogDialog = (mt: MetricType) => {
+    setLogDialog({ open: true, metricType: mt, date: today, value: "" });
+  };
 
+  const closeLogDialog = () => {
+    setLogDialog({ open: false, metricType: null, date: today, value: "" });
+  };
+
+  const submitLog = async () => {
+    const mt = logDialog.metricType;
+    if (!mt) return;
+
+    const v = Number(logDialog.value);
+    if (!Number.isFinite(v)) return setErr("Please enter a valid number.");
+
+    const key = `${mt.metricTypeId}|${logDialog.date}`;
+    setMutatingKey(key);
     setErr(null);
-    setBusy(key, true);
 
-    const existing = metricByTypeAndDate.get(key);
-    const nextValue = Math.max(0, Math.floor(nextValueRaw));
-
-    try {
-      // optimistic UI
-      if (existing) {
-        upsertMetric({ ...existing, value: nextValue });
-      } else {
-        if (nextValue === 0) return; // don’t create empty “0” rows
-        upsertMetric({
-          metricId: "optimistic-" + mt.metricTypeId,
-          metricTypeId: mt.metricTypeId,
-          metricTypeName: mt.name,
-          date: today,
-          value: nextValue,
-        });
-      }
-
-      // persist
-      if (existing && !existing.metricId.startsWith("optimistic-")) {
-        const upd = await updateMetric(existing.metricId, nextValue);
-        if (!upd.success) {
-          upsertMetric(existing); // rollback
-          setErr(upd.error);
-          return;
-        }
-        upsertMetric(upd.data);
-      } else {
-        // If we created optimistic stub, replace with actual POST
-        const created = await logMetric(mt.metricTypeId, today, nextValue);
-        if (!created.success) {
-          removeMetricByTypeAndDate(mt.metricTypeId, today);
-          setErr(created.error);
-          return;
-        }
-        upsertMetric(created.data);
-      }
-    } finally {
-      setBusy(key, false);
+    const res = await logMetric(mt.metricTypeId, logDialog.date, v);
+    if (!res.success) {
+      setErr(res.error);
+      setMutatingKey(null);
+      return;
     }
+
+    upsertMetricInState(res.data);
+    closeLogDialog();
+    setMutatingKey(null);
   };
 
   const ProgressGrid = ({ mt, days }: { mt: MetricType; days: number[] }) => (
@@ -456,14 +485,10 @@ export default function Home() {
               ) : (
                 <Stack spacing={1} sx={{ maxHeight: 420, overflow: "auto", pr: 1 }}>
                   {metricTypes.slice(0, 10).map((mt) => {
-                    const key = `${mt.metricTypeId}|${today}`;
-                    const busy = Boolean(busyByKey[key]);
-
                     const isBoolean = mt.kind === "Boolean";
                     const checked = todayChecked.get(mt.metricTypeId) ?? false;
-
-                    const existing = metricByTypeAndDate.get(key);
-                    const value = existing?.value ?? 0;
+                    const key = `${mt.metricTypeId}|${today}`;
+                    const busy = mutatingKey === key;
 
                     return (
                       <Paper key={mt.metricTypeId} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
@@ -483,21 +508,21 @@ export default function Home() {
                             <Typography variant="caption" color="text.secondary">
                               {mt.kind}
                               {mt.unit ? ` • ${mt.unit}` : ""}
-                              {!isBoolean ? " • adjust today" : ""}
+                              {mt.goalValue > 0 ? ` • goal: ${mt.goalValue} (${cadenceLabel(mt.goalCadence)})` : ""}
+                              {!isBoolean ? " • log value" : ""}
                             </Typography>
                           </Box>
 
                           {!isBoolean && (
-                            <InlineStepper
-                              value={value}
-                              unit={mt.unit}
-                              min={0}
-                              size="compact"
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              sx={{ textTransform: "none", borderRadius: 2 }}
+                              onClick={() => openLogDialog(mt)}
                               disabled={busy}
-                              onChange={async (next) => {
-                                await setTodayValueAbsolute(mt, next);
-                              }}
-                            />
+                            >
+                              Log
+                            </Button>
                           )}
                         </Stack>
                       </Paper>
@@ -524,25 +549,27 @@ export default function Home() {
             <Paper variant="outlined" sx={{ p: 3, borderRadius: 3, height: "100%" }}>
               <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                  Weekly goals
+                  Goals
                 </Typography>
                 <IconButton size="small" onClick={() => navigate("/metrics")} aria-label="manage metrics">
                   <AddIcon />
                 </IconButton>
               </Stack>
 
-              {weeklyGoals.length === 0 ? (
-                <Typography color="text.secondary">Create metrics to see weekly progress.</Typography>
+              {goalCards.length === 0 ? (
+                <Typography color="text.secondary">
+                  Set goal values on your metric types to see progress here.
+                </Typography>
               ) : (
                 <Stack spacing={2}>
-                  {weeklyGoals.map((g) => (
+                  {goalCards.map((g) => (
                     <Box key={g.id}>
                       <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75 }}>
                         <Typography variant="body2" sx={{ fontWeight: 800 }}>
                           {g.label}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {Math.round(g.progress * 100)}% • {g.meta}
+                          {Math.round(g.progress * 100)}% • {g.meta} • {g.cadenceLabel}
                         </Typography>
                       </Stack>
                       <LinearProgress
@@ -556,7 +583,7 @@ export default function Home() {
               )}
 
               <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
-                v1: progress = active days this week (default goal 5 days).
+                Tip: Boolean goals are most intuitive as “days per week” (e.g., 5).
               </Typography>
             </Paper>
           </Grid>
@@ -594,6 +621,41 @@ export default function Home() {
           </Grid>
         </Grid>
       )}
+
+      <Dialog open={logDialog.open} onClose={closeLogDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>Log metric</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {logDialog.metricType?.name} • {logDialog.metricType?.kind}
+              {logDialog.metricType?.unit ? ` • ${logDialog.metricType.unit}` : ""}
+            </Typography>
+
+            <TextField
+              label="Date (YYYY-MM-DD)"
+              value={logDialog.date}
+              onChange={(e) => setLogDialog((s) => ({ ...s, date: e.target.value }))}
+              fullWidth
+            />
+
+            <TextField
+              label={logDialog.metricType?.kind === "Duration" ? "Duration (minutes)" : "Value"}
+              value={logDialog.value}
+              onChange={(e) => setLogDialog((s) => ({ ...s, value: e.target.value }))}
+              fullWidth
+              inputMode="decimal"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeLogDialog} sx={{ textTransform: "none" }}>
+            Cancel
+          </Button>
+          <Button onClick={submitLog} variant="contained" sx={{ textTransform: "none" }}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

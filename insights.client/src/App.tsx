@@ -22,14 +22,16 @@ function App() {
     <BrowserRouter>
       <Routes>
         {/* Public */}
-        <Route path="/" element={user ? <Navigate to="/Dashboard" replace /> : <Landing />} />
+        <Route
+          path="/"
+          element={user ? <Navigate to="/dashboard" replace /> : <Landing />}
+        />
 
-        {/* Authed app */}
         {user ? (
           <Route element={<AppLayout />}>
-            <Route path="//Dashboard" element={<Home />} />
+            <Route path="/dashboard" element={<Home />} />
             <Route path="/metrics" element={<MetricView />} />
-            <Route path="*" element={<Navigate to="/Dashboard" replace />} />
+            <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         ) : (
           <Route path="*" element={<Navigate to="/" replace />} />

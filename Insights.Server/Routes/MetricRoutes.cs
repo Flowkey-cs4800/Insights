@@ -8,9 +8,23 @@ namespace Insights.Server.Routes;
 public static class MetricRoutes
 {
     // --- DTOs ---
-    public record MetricTypeResponse(Guid MetricTypeId, string Name, MetricKind Kind, string? Unit);
-    public record MetricTypeRequest(string Name, MetricKind Kind, string? Unit);
-    
+    public record MetricTypeResponse(
+        Guid MetricTypeId,
+        string Name,
+        MetricKind Kind,
+        string? Unit,
+        GoalCadence GoalCadence,
+        int GoalValue
+    );
+
+    public record MetricTypeRequest(
+        string Name,
+        MetricKind Kind,
+        string? Unit,
+        GoalCadence GoalCadence,
+        int GoalValue
+    );
+
     public record MetricResponse(Guid MetricId, Guid MetricTypeId, string MetricTypeName, DateOnly Date, int Value);
     public record MetricRequest(Guid MetricTypeId, DateOnly Date, int Value);
     public record MetricUpdateRequest(int Value);
@@ -31,13 +45,18 @@ public static class MetricRoutes
             var metricTypes = await db.MetricTypes
                 .Where(mt => mt.UserId == userId)
                 .OrderBy(mt => mt.Name)
-                .Select(mt => new MetricTypeResponse(mt.MetricTypeId, mt.Name, mt.Kind, mt.Unit))
+                .Select(mt => new MetricTypeResponse(
+                    mt.MetricTypeId,
+                    mt.Name,
+                    mt.Kind,
+                    mt.Unit,
+                    mt.GoalCadence,
+                    mt.GoalValue
+                ))
                 .ToListAsync();
 
             return Results.Ok(metricTypes);
         })
-        .WithSummary("List metric types")
-        .WithDescription("Returns all metric types created by the current user.")
         .Produces<List<MetricTypeResponse>>(200)
         .Produces(401);
 
@@ -47,26 +66,42 @@ public static class MetricRoutes
             var userId = GetUserId(context);
             if (userId is null) return Results.Unauthorized();
 
+            var goalValue = Math.Max(0, request.GoalValue);
+
+            // For Boolean Weekly, clamp to max 7 days
+            if (request.Kind == MetricKind.Boolean && request.GoalCadence == GoalCadence.Weekly)
+                goalValue = Math.Min(7, goalValue);
+
+            // For Boolean Daily, clamp to max 1 (done/not done)
+            if (request.Kind == MetricKind.Boolean && request.GoalCadence == GoalCadence.Daily)
+                goalValue = Math.Min(1, goalValue);
+
             var metricType = new MetricType
             {
                 MetricTypeId = Guid.NewGuid(),
                 UserId = userId.Value,
                 Name = request.Name,
                 Kind = request.Kind,
-                Unit = request.Unit
+                Unit = request.Unit,
+                GoalCadence = request.GoalCadence,
+                GoalValue = goalValue
             };
 
             db.MetricTypes.Add(metricType);
             await db.SaveChangesAsync();
 
             return Results.Created($"/api/metric-types/{metricType.MetricTypeId}",
-                new MetricTypeResponse(metricType.MetricTypeId, metricType.Name, metricType.Kind, metricType.Unit));
+                new MetricTypeResponse(
+                    metricType.MetricTypeId,
+                    metricType.Name,
+                    metricType.Kind,
+                    metricType.Unit,
+                    metricType.GoalCadence,
+                    metricType.GoalValue
+                ));
         })
-        .WithSummary("Create metric type")
-        .WithDescription("Creates a new metric type. IsDuration=true for time-based metrics (stored as minutes), false for counts/scales.")
         .Produces<MetricTypeResponse>(201)
         .Produces(401);
-
 
         // Update metric type
         types.MapPut("/{id:guid}", async (Guid id, MetricTypeRequest request, HttpContext context, InsightsContext db) =>
@@ -79,19 +114,34 @@ public static class MetricRoutes
 
             if (metricType is null) return Results.NotFound();
 
+            var goalValue = Math.Max(0, request.GoalValue);
+
+            if (request.Kind == MetricKind.Boolean && request.GoalCadence == GoalCadence.Weekly)
+                goalValue = Math.Min(7, goalValue);
+
+            if (request.Kind == MetricKind.Boolean && request.GoalCadence == GoalCadence.Daily)
+                goalValue = Math.Min(1, goalValue);
+
             metricType.Name = request.Name;
             metricType.Kind = request.Kind;
             metricType.Unit = request.Unit;
+            metricType.GoalCadence = request.GoalCadence;
+            metricType.GoalValue = goalValue;
+
             await db.SaveChangesAsync();
 
-            return Results.Ok(new MetricTypeResponse(metricType.MetricTypeId, metricType.Name, metricType.Kind, metricType.Unit));
+            return Results.Ok(new MetricTypeResponse(
+                metricType.MetricTypeId,
+                metricType.Name,
+                metricType.Kind,
+                metricType.Unit,
+                metricType.GoalCadence,
+                metricType.GoalValue
+            ));
         })
-        .WithSummary("Update metric type")
-        .WithDescription("Updates an existing metric type's name or duration setting.")
         .Produces<MetricTypeResponse>(200)
         .Produces(401)
         .Produces(404);
-
 
         // Delete metric type
         types.MapDelete("/{id:guid}", async (Guid id, HttpContext context, InsightsContext db) =>
@@ -109,8 +159,6 @@ public static class MetricRoutes
 
             return Results.NoContent();
         })
-        .WithSummary("Delete metric type")
-        .WithDescription("Deletes a metric type and all its associated metric entries.")
         .Produces(204)
         .Produces(401)
         .Produces(404);
@@ -119,7 +167,6 @@ public static class MetricRoutes
         var metrics = app.MapGroup("/api/metrics")
             .WithTags("Metrics")
             .RequireAuthorization();
-
 
         // List metrics
         metrics.MapGet("/", async (DateOnly? from, DateOnly? to, Guid? metricTypeId, HttpContext context, InsightsContext db) =>
@@ -133,7 +180,7 @@ public static class MetricRoutes
 
             if (from.HasValue)
                 query = query.Where(m => m.Date >= from.Value);
-            
+
             if (to.HasValue)
                 query = query.Where(m => m.Date <= to.Value);
 
@@ -147,11 +194,8 @@ public static class MetricRoutes
 
             return Results.Ok(results);
         })
-        .WithSummary("List metrics")
-        .WithDescription("Returns metrics for the current user. Filter by date range (from/to) and/or metricTypeId.")
         .Produces<List<MetricResponse>>(200)
         .Produces(401);
-
 
         // Create metric entry
         metrics.MapPost("/", async (MetricRequest request, HttpContext context, InsightsContext db) =>
@@ -186,13 +230,10 @@ public static class MetricRoutes
             return Results.Created($"/api/metrics/{metric.MetricId}",
                 new MetricResponse(metric.MetricId, metric.MetricTypeId, metricType.Name, metric.Date, metric.Value));
         })
-        .WithSummary("Log metric")
-        .WithDescription("Records a metric value for a specific date. Value is minutes for duration types, raw number for count/scale types.")
         .Produces<MetricResponse>(201)
         .Produces(400)
         .Produces(401)
         .Produces(409);
-
 
         // Update metric entry
         metrics.MapPut("/{id:guid}", async (Guid id, MetricUpdateRequest request, HttpContext context, InsightsContext db) =>
@@ -211,13 +252,9 @@ public static class MetricRoutes
 
             return Results.Ok(new MetricResponse(metric.MetricId, metric.MetricTypeId, metric.MetricType.Name, metric.Date, metric.Value));
         })
-        .WithSummary("Update metric")
-        .WithDescription("Updates the value of an existing metric entry.")
         .Produces<MetricResponse>(200)
         .Produces(401)
         .Produces(404);
-
-
 
         // Delete metric entry
         metrics.MapDelete("/{id:guid}", async (Guid id, HttpContext context, InsightsContext db) =>
@@ -235,13 +272,10 @@ public static class MetricRoutes
 
             return Results.NoContent();
         })
-        .WithSummary("Delete metric")
-        .WithDescription("Deletes a metric entry.")
         .Produces(204)
         .Produces(401)
         .Produces(404);
     }
-
 
     // Helper to get UserId from HttpContext
     private static Guid? GetUserId(HttpContext context)

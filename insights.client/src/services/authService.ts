@@ -1,4 +1,4 @@
-import { callApi } from './apiService';
+import { callApi } from "./apiService";
 
 export interface User {
   userId: string;
@@ -7,20 +7,28 @@ export interface User {
 }
 
 export async function getCurrentUser() {
-  return callApi<User>('/api/auth/me');
+  return callApi<User>("/api/auth/me");
 }
 
-export function login(returnUrl?: string) {
-  const url = returnUrl 
-    ? `/api/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`
-    : '/api/auth/login';
-  window.location.href = url;
+export function login() {
+  const width = 500;
+  const height = 600;
+  const left = window.screenX + (window.outerWidth - width) / 2;
+  const top = window.screenY + (window.outerHeight - height) / 2;
+
+  const callbackUrl = window.location.origin + "/auth-callback";
+
+  window.open(
+    `/api/auth/login?returnUrl=${encodeURIComponent(callbackUrl)}`,
+    "google-login",
+    `width=${width},height=${height},left=${left},top=${top}`
+  );
 }
 
 export async function logout() {
-  const result = await callApi<{ message: string }>('/api/auth/logout', 'POST');
+  const result = await callApi<{ message: string }>("/api/auth/logout", "POST");
   if (result.success) {
-    window.location.href = '/';
+    window.location.href = "/";
   }
   return result;
 }

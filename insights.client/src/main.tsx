@@ -4,12 +4,17 @@ import App from "./App.tsx";
 import { AuthProvider } from "./context/AuthProvider.tsx";
 import { ThemeProvider } from "./context/ThemeProvider.tsx";
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <ThemeProvider>
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </ThemeProvider>
-  </StrictMode>
-);
+if (window.location.pathname === "/auth-callback") {
+  window.opener?.postMessage({ type: "auth-success" }, window.location.origin);
+  window.close();
+} else {
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <ThemeProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </ThemeProvider>
+    </StrictMode>
+  );
+}

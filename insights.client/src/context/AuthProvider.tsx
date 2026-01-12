@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
-import type { User } from '../services/authService';
-import { getCurrentUser } from '../services/authService';
-import { AuthContext } from './AuthContext';
+import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
+import type { User } from "../services/authService";
+import { getCurrentUser } from "../services/authService";
+import { AuthContext } from "./AuthContext";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -38,6 +38,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       ignore = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (
+        event.origin === window.location.origin &&
+        event.data?.type === "auth-success"
+      ) {
+        refreshUser();
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   return (

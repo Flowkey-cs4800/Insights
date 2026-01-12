@@ -34,17 +34,27 @@ export default function AppBar() {
   const location = useLocation();
 
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
-  const [anchorElMobile, setAnchorElMobile] = useState<null | HTMLElement>(null);
+  const [anchorElMobile, setAnchorElMobile] = useState<null | HTMLElement>(
+    null
+  );
 
   const authedNav: NavItem[] = useMemo(
     () => [
-      { label: "Dashboard", to: "/dashboard", icon: <DashboardIcon fontSize="small" /> },
-      { label: "Metrics", to: "/metrics", icon: <ListAltIcon fontSize="small" /> },
+      {
+        label: "Dashboard",
+        to: "/dashboard",
+        icon: <DashboardIcon fontSize="small" />,
+      },
+      {
+        label: "Metrics",
+        to: "/metrics",
+        icon: <ListAltIcon fontSize="small" />,
+      },
     ],
     []
   );
 
-  const guestNav: NavItem[] = useMemo(() => [{ label: "Home", to: "/" }], []);
+  const guestNav: NavItem[] = useMemo(() => [], []);
 
   const nav = user ? authedNav : guestNav;
 
@@ -53,10 +63,12 @@ export default function AppBar() {
     return location.pathname.startsWith(to);
   };
 
-  const handleOpenUserMenu = (e: React.MouseEvent<HTMLElement>) => setAnchorElUser(e.currentTarget);
+  const handleOpenUserMenu = (e: React.MouseEvent<HTMLElement>) =>
+    setAnchorElUser(e.currentTarget);
   const handleCloseUserMenu = () => setAnchorElUser(null);
 
-  const handleOpenMobileMenu = (e: React.MouseEvent<HTMLElement>) => setAnchorElMobile(e.currentTarget);
+  const handleOpenMobileMenu = (e: React.MouseEvent<HTMLElement>) =>
+    setAnchorElMobile(e.currentTarget);
   const handleCloseMobileMenu = () => setAnchorElMobile(null);
 
   const handleNav = (to: string) => {
@@ -94,12 +106,20 @@ export default function AppBar() {
               mr: 2,
             }}
           >
-            <img src="/logo.png" alt="Insights" style={{ height: 30, width: "auto" }} />
-            <Typography sx={{ fontWeight: 900, letterSpacing: "-0.5px" }}>INSIGHTS</Typography>
+            <img
+              src="/logo.png"
+              alt="Insights"
+              style={{ height: 30, width: "auto" }}
+            />
+            <Typography sx={{ fontWeight: 900, letterSpacing: "-0.5px" }}>
+              INSIGHTS
+            </Typography>
           </Box>
 
           {/* Desktop nav */}
-          <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1, flexGrow: 1 }}>
+          <Box
+            sx={{ display: { xs: "none", md: "flex" }, gap: 1, flexGrow: 1 }}
+          >
             {nav.map((item) => (
               <Button
                 key={item.to}
@@ -121,7 +141,10 @@ export default function AppBar() {
 
           {/* Mobile nav (hamburger) */}
           <Box sx={{ display: { xs: "flex", md: "none" }, flexGrow: 1 }}>
-            <IconButton onClick={handleOpenMobileMenu} aria-label="open navigation">
+            <IconButton
+              onClick={handleOpenMobileMenu}
+              aria-label="open navigation"
+            >
               <MenuIcon />
             </IconButton>
 
@@ -156,7 +179,11 @@ export default function AppBar() {
               <Button
                 onClick={handleOpenUserMenu}
                 startIcon={<AccountCircleIcon />}
-                sx={{ textTransform: "none", color: "text.primary", fontWeight: 700 }}
+                sx={{
+                  textTransform: "none",
+                  color: "text.primary",
+                  fontWeight: 700,
+                }}
               >
                 {user.name}
               </Button>

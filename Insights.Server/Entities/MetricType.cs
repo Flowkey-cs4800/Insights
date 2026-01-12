@@ -28,4 +28,5 @@ public class MetricType
 
     // Navigation
     public List<Metric> Metrics { get; set; } = new();
+    public User User { get; set; } = null!;
 }

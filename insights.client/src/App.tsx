@@ -1,5 +1,6 @@
 import { CircularProgress, Box } from "@mui/material";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
 
 import { useAuth } from "./hooks/useAuth";
 import Landing from "./pages/Landing";
@@ -7,8 +8,24 @@ import Home from "./pages/Home";
 import MetricView from "./pages/MetricView";
 import AppLayout from "./layout/AppLayout";
 
+function AuthCallback() {
+  useEffect(() => {
+    window.opener?.postMessage(
+      { type: "auth-success" },
+      window.location.origin
+    );
+    window.close();
+  }, []);
+  return <div>Signing in...</div>;
+}
+
 function App() {
   const { user, loading } = useAuth();
+
+  // Handle auth callback immediately
+  if (window.location.pathname === "/auth-callback") {
+    return <AuthCallback />;
+  }
 
   if (loading) {
     return (
@@ -21,7 +38,6 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public */}
         <Route
           path="/"
           element={user ? <Navigate to="/dashboard" replace /> : <Landing />}

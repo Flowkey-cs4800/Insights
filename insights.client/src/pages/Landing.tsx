@@ -8,6 +8,9 @@ import { login } from "../services/authService";
 import AppBar from "../components/AppBar";
 
 export default function Landing() {
+  const params = new URLSearchParams(window.location.search);
+  const returnUrl = params.get("returnUrl") ?? "/dashboard";
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
       <AppBar />
@@ -42,7 +45,7 @@ export default function Landing() {
             <Button
               variant="contained"
               size="large"
-              onClick={() => login()}
+              onClick={() => login(returnUrl)}
               startIcon={<GoogleIcon />}
               sx={{
                 textTransform: "none",

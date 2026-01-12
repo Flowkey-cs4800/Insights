@@ -6,8 +6,18 @@ using Microsoft.EntityFrameworkCore;
 using Insights.Server.Data;
 using Insights.Server.Routes;
 using Scalar.AspNetCore;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+
+
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 // Database
 builder.Services.AddDbContext<InsightsContext>(options =>

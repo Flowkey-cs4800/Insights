@@ -19,6 +19,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import ListAltIcon from "@mui/icons-material/ListAlt";
+import ShowChartIcon from "@mui/icons-material/ShowChart";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 import AccountCircleIcon from "@mui/icons-material/AccountCircle";
@@ -46,6 +47,7 @@ export default function AppLayout() {
     () => [
       { label: "Dashboard", to: "/dashboard", icon: <DashboardIcon /> },
       { label: "Metrics", to: "/metrics", icon: <ListAltIcon /> },
+      { label: "Insights", to: "/insights", icon: <ShowChartIcon /> },
     ],
     []
   );
@@ -62,19 +64,34 @@ export default function AppLayout() {
   const handleCloseUserMenu = () => setAnchorElUser(null);
 
   const handleLogout = async () => {
-  handleCloseUserMenu();
-  await logout();
-  navigate("/", { replace: true }); // landing page
-};
+    handleCloseUserMenu();
+    await logout();
+    navigate("/", { replace: true });
+  };
+
+  const getPageTitle = () => {
+    if (isActive("/metrics")) return "Metrics";
+    if (isActive("/insights")) return "Insights";
+    return "Dashboard";
+  };
 
   const drawer = (
     <Box sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
       <Box sx={{ px: 2, py: 2 }}>
         <Box
-          sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer" }}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            cursor: "pointer",
+          }}
           onClick={() => handleNav("/dashboard")}
         >
-          <img src="/logo.png" alt="Insights" style={{ height: 28, width: "auto" }} />
+          <img
+            src="/logo.png"
+            alt="Insights"
+            style={{ height: 28, width: "auto" }}
+          />
           <Typography sx={{ fontWeight: 900, letterSpacing: "-0.5px" }}>
             INSIGHTS
           </Typography>
@@ -96,7 +113,10 @@ export default function AppLayout() {
             sx={{ borderRadius: 2, mx: 1, my: 0.5 }}
           >
             <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-            <ListItemText primary={item.label} primaryTypographyProps={{ fontWeight: 800 }} />
+            <ListItemText
+              primary={item.label}
+              primaryTypographyProps={{ fontWeight: 800 }}
+            />
           </ListItemButton>
         ))}
       </List>
@@ -120,7 +140,13 @@ export default function AppLayout() {
   );
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+    <Box
+      sx={{
+        display: "flex",
+        minHeight: "100vh",
+        bgcolor: "background.default",
+      }}
+    >
       {/* Top App Bar */}
       <MuiAppBar
         position="fixed"
@@ -145,8 +171,10 @@ export default function AppLayout() {
             <MenuIcon />
           </IconButton>
 
-          <Typography sx={{ fontWeight: 900, letterSpacing: "-0.5px", flexGrow: 1 }}>
-            {isActive("/metrics") ? "Metrics" : "Dashboard"}
+          <Typography
+            sx={{ fontWeight: 900, letterSpacing: "-0.5px", flexGrow: 1 }}
+          >
+            {getPageTitle()}
           </Typography>
 
           <Tooltip title={mode === "light" ? "Dark mode" : "Light mode"}>
@@ -158,9 +186,17 @@ export default function AppLayout() {
           <Button
             onClick={handleOpenUserMenu}
             startIcon={<AccountCircleIcon />}
-            sx={{ textTransform: "none", fontWeight: 800, color: "text.primary" }}
+            sx={{
+              textTransform: "none",
+              fontWeight: 800,
+              color: "text.primary",
+              minWidth: { xs: "auto", sm: "auto" },
+              px: { xs: 1, sm: 2 },
+            }}
           >
-            {user?.name ?? "Account"}
+            <Box sx={{ display: { xs: "none", sm: "block" } }}>
+              {user?.name ?? "Account"}
+            </Box>
           </Button>
 
           <Menu
@@ -191,6 +227,14 @@ export default function AppLayout() {
               }}
             >
               Metrics
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                handleCloseUserMenu();
+                navigate("/insights");
+              }}
+            >
+              Insights
             </MenuItem>
             <Divider />
             <MenuItem onClick={handleLogout}>
@@ -236,18 +280,17 @@ export default function AppLayout() {
         {drawer}
       </Drawer>
 
-      {/* Main content: IMPORTANT — NO ml here (fixes the big gap) */}
+      {/* Main content */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          px: { xs: 2, md: 3 }, // consistent padding next to sidebar
+          px: { xs: 2, md: 3 },
           pb: 4,
           minWidth: 0,
         }}
       >
         <Toolbar />
-        {/* keep vertical gap below top bar, but still full width */}
         <Box sx={{ mt: 3 }}>
           <Outlet />
         </Box>

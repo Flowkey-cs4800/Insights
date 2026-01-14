@@ -183,9 +183,13 @@ export default function AppBar() {
                   textTransform: "none",
                   color: "text.primary",
                   fontWeight: 700,
+                  minWidth: { xs: "auto", sm: "auto" },
+                  px: { xs: 1, sm: 2 },
                 }}
               >
-                {user.name}
+                <Box sx={{ display: { xs: "none", sm: "block" } }}>
+                  {user.name}
+                </Box>
               </Button>
 
               <Menu

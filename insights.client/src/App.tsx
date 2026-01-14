@@ -6,6 +6,7 @@ import { useAuth } from "./hooks/useAuth";
 import Landing from "./pages/Landing";
 import Home from "./pages/Home";
 import MetricView from "./pages/MetricView";
+import Insights from "./pages/Insights";
 import AppLayout from "./layout/AppLayout";
 
 function AuthCallback() {
@@ -47,6 +48,7 @@ function App() {
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<Home />} />
             <Route path="/metrics" element={<MetricView />} />
+            <Route path="/insights" element={<Insights />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         ) : (

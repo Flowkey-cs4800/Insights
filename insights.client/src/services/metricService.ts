@@ -22,13 +22,59 @@ export interface Metric {
   value: number;
 }
 
+export interface ComparePoint {
+  date: string;
+  x: number;
+  y: number;
+}
+
 export interface CompareResult {
   metricX: string;
   metricY: string;
   unitX: string | null;
   unitY: string | null;
-  points: { date: string; x: number; y: number }[];
+  points: ComparePoint[];
   correlation: number | null;
+}
+
+export interface ComparisonGroup {
+  label: string;
+  value: number;
+  count: number;
+}
+
+export interface ComparisonData {
+  groupA: ComparisonGroup;
+  groupB: ComparisonGroup;
+  valueType: "percentage" | "average";
+  percentDiff: number;
+  threshold: number | null;
+  unit: string | null;
+}
+
+export interface InsightItem {
+  metricTypeIdX: string;
+  metricTypeIdY: string | null;
+  metricX: string;
+  metricY: string | null;
+  unitX: string | null;
+  unitY: string | null;
+  strength: number;
+  direction: "positive" | "negative" | "neutral";
+  summary: string;
+  dataPoints: number;
+  insightType: "correlation" | "streak" | "consistency" | "average";
+  comparisonType:
+    | "boolean_boolean"
+    | "boolean_numeric"
+    | "numeric_numeric"
+    | null;
+  comparisonData: ComparisonData | null;
+  scatterData: ComparePoint[] | null;
+}
+
+export interface InsightsResponse {
+  insights: InsightItem[];
 }
 
 // Metric Types
@@ -69,7 +115,11 @@ export const deleteMetricType = (id: string) =>
   callApi(`/api/metric-types/${id}`, "DELETE");
 
 // Metrics
-export const getMetrics = (from?: string, to?: string, metricTypeId?: string) => {
+export const getMetrics = (
+  from?: string,
+  to?: string,
+  metricTypeId?: string
+) => {
   const params = new URLSearchParams();
   if (from) params.append("from", from);
   if (to) params.append("to", to);
@@ -83,10 +133,15 @@ export const logMetric = (metricTypeId: string, date: string, value: number) =>
 export const updateMetric = (id: string, value: number) =>
   callApi<Metric>(`/api/metrics/${id}`, "PUT", { value });
 
-export const deleteMetric = (id: string) => callApi(`/api/metrics/${id}`, "DELETE");
+export const deleteMetric = (id: string) =>
+  callApi(`/api/metrics/${id}`, "DELETE");
 
-// Compare
+// Compare two specific metrics
 export const compareMetrics = (metricTypeIdX: string, metricTypeIdY: string) =>
   callApi<CompareResult>(
     `/api/metrics/compare?metricTypeIdX=${metricTypeIdX}&metricTypeIdY=${metricTypeIdY}`
   );
+
+// Get top insights (auto-discovered correlations)
+export const getInsights = () =>
+  callApi<InsightsResponse>("/api/metrics/insights");

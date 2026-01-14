@@ -1,28 +1,39 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
 import {
+  Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Paper,
+  Snackbar,
   Stack,
+  Tab,
+  Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
+import dayjs from "dayjs";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import RemoveIcon from "@mui/icons-material/Remove";
-import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
-import TodayIcon from "@mui/icons-material/Today";
 import EditIcon from "@mui/icons-material/Edit";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import { useNavigate } from "react-router-dom";
+import LogEntryDialog from "../components/LogEntryDialog";
 
 import {
   createMetricType,
@@ -31,12 +42,13 @@ import {
   getMetricTypes,
   getMetrics,
   logMetric,
-  updateMetric,
   deleteMetric,
   type MetricType,
   type Metric,
   type GoalCadence,
 } from "../services/metricService";
+
+const cadenceLabel = (c: GoalCadence) => (c === 0 ? "Daily" : "Weekly");
 
 function isoDate(d: Date) {
   const y = d.getFullYear();
@@ -45,14 +57,22 @@ function isoDate(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-const cadenceLabel = (c: GoalCadence) => (c === 0 ? "Daily" : "Weekly");
+const ENTRIES_PER_PAGE = 10;
+
+type LogDialogState = {
+  open: boolean;
+  metricType: MetricType | null;
+  date: string;
+  value: string;
+};
 
 type CreateState = {
   open: boolean;
   name: string;
   kind: "Duration" | "Number" | "Boolean";
   unit: string;
-  goalCadence: GoalCadence; // 0 daily, 1 weekly
+  hasGoal: boolean;
+  goalCadence: GoalCadence;
   goalValue: string;
 };
 
@@ -62,24 +82,41 @@ type EditState = {
   name: string;
   kind: "Duration" | "Number" | "Boolean";
   unit: string;
+  hasGoal: boolean;
   goalCadence: GoalCadence;
   goalValue: string;
 };
 
-type SetValueState = {
-  open: boolean;
-  metricType: MetricType | null;
-  value: string;
-};
-
 export default function MetricView() {
   const navigate = useNavigate();
-  const today = useMemo(() => isoDate(new Date()), []);
+
+  const [tab, setTab] = useState<"types" | "history">("types");
 
   const [metricTypes, setMetricTypes] = useState<MetricType[]>([]);
-  const [todayMetrics, setTodayMetrics] = useState<Metric[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
+
+  // History state
+  const [historyEntries, setHistoryEntries] = useState<Metric[]>([]);
+  const [historyFilter, setHistoryFilter] = useState<string>("all");
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Date range (default: last 30 days)
+  const [dateFrom, setDateFrom] = useState<dayjs.Dayjs | null>(
+    dayjs().subtract(30, "day")
+  );
+  const [dateTo, setDateTo] = useState<dayjs.Dayjs | null>(dayjs());
+
+  // Pagination
+  const [historyPage, setHistoryPage] = useState(0);
+
+  // Log entry dialog
+  const [logDialog, setLogDialog] = useState<LogDialogState>({
+    open: false,
+    metricType: null,
+    date: isoDate(new Date()),
+    value: "",
+  });
 
   // Per-metricTypeId busy flags
   const [busyByType, setBusyByType] = useState<Record<string, boolean>>({});
@@ -89,6 +126,7 @@ export default function MetricView() {
     name: "",
     kind: "Boolean",
     unit: "",
+    hasGoal: false,
     goalCadence: 1,
     goalValue: "5",
   });
@@ -99,53 +137,141 @@ export default function MetricView() {
     name: "",
     kind: "Boolean",
     unit: "",
+    hasGoal: false,
     goalCadence: 1,
     goalValue: "5",
   });
-
-  const [setValueState, setSetValueState] = useState<SetValueState>({
-    open: false,
-    metricType: null,
-    value: "",
-  });
-
-  const todayByTypeId = useMemo(() => {
-    const map = new Map<string, Metric>();
-    for (const m of todayMetrics) map.set(m.metricTypeId, m);
-    return map;
-  }, [todayMetrics]);
 
   const initialLoad = async () => {
     setLoading(true);
     setErr(null);
 
-    const [typesRes, metricsRes] = await Promise.all([
-      getMetricTypes(),
-      getMetrics(today, today),
-    ]);
+    const typesRes = await getMetricTypes();
 
     if (!typesRes.success) {
       setErr(typesRes.error);
       setLoading(false);
       return;
     }
-    if (!metricsRes.success) {
-      setErr(metricsRes.error);
-      setLoading(false);
-      return;
-    }
 
     setMetricTypes(typesRes.data);
-    setTodayMetrics(metricsRes.data);
     setLoading(false);
   };
-
-  const location = useLocation();
 
   useEffect(() => {
     void initialLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.key]);
+  }, []);
+
+  // ----- History -----
+
+  const loadHistory = async () => {
+    setHistoryLoading(true);
+    const from = dateFrom?.format("YYYY-MM-DD");
+    const to = dateTo?.format("YYYY-MM-DD");
+    const res = await getMetrics(from, to);
+    if (res.success) {
+      setHistoryEntries(res.data);
+      setHistoryPage(0);
+    } else {
+      setErr(res.error);
+    }
+    setHistoryLoading(false);
+  };
+
+  // Reload when date range changes
+  useEffect(() => {
+    if (tab === "history") {
+      void loadHistory();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateFrom, dateTo]);
+
+  const filteredHistory = useMemo(() => {
+    if (historyFilter === "all") return historyEntries;
+    return historyEntries.filter((e) => e.metricTypeId === historyFilter);
+  }, [historyEntries, historyFilter]);
+
+  // Group entries by date
+  const groupedByDate = useMemo(() => {
+    const groups = new Map<string, Metric[]>();
+    for (const entry of filteredHistory) {
+      const dateKey = entry.date?.slice(0, 10) ?? "";
+      if (!groups.has(dateKey)) {
+        groups.set(dateKey, []);
+      }
+      groups.get(dateKey)!.push(entry);
+    }
+    // Sort dates descending
+    return Array.from(groups.entries()).sort((a, b) =>
+      b[0].localeCompare(a[0])
+    );
+  }, [filteredHistory]);
+
+  // Pagination
+  const totalPages = Math.ceil(groupedByDate.length / ENTRIES_PER_PAGE);
+  const paginatedDates = useMemo(() => {
+    const start = historyPage * ENTRIES_PER_PAGE;
+    return groupedByDate.slice(start, start + ENTRIES_PER_PAGE);
+  }, [groupedByDate, historyPage]);
+
+  // Reset page if out of bounds
+  useEffect(() => {
+    if (historyPage > 0 && historyPage >= totalPages) {
+      setHistoryPage(Math.max(0, totalPages - 1));
+    }
+  }, [historyPage, totalPages]);
+
+  const deleteHistoryEntry = async (metricId: string) => {
+    const res = await deleteMetric(metricId);
+    if (!res.success) {
+      setErr(res.error);
+      return;
+    }
+    setHistoryEntries((prev) => prev.filter((e) => e.metricId !== metricId));
+  };
+
+  // Log dialog handlers
+  const openLogDialog = (date?: string) => {
+    setLogDialog({
+      open: true,
+      metricType: null,
+      date: date ?? isoDate(new Date()),
+      value: "",
+    });
+  };
+
+  const closeLogDialog = () => {
+    setLogDialog({
+      open: false,
+      metricType: null,
+      date: isoDate(new Date()),
+      value: "",
+    });
+  };
+
+  const submitLog = async () => {
+    const mt = logDialog.metricType;
+    if (!mt) return;
+
+    let v: number;
+    if (mt.kind === "Boolean") {
+      v = 1;
+    } else {
+      v = Number(logDialog.value);
+      if (!Number.isFinite(v)) return setErr("Please enter a valid number.");
+    }
+
+    setErr(null);
+    const res = await logMetric(mt.metricTypeId, logDialog.date, v);
+    if (!res.success) {
+      setErr(res.error);
+      return;
+    }
+
+    setHistoryEntries((prev) => [res.data, ...prev]);
+    closeLogDialog();
+  };
 
   // ----- Local state helpers -----
 
@@ -163,18 +289,7 @@ export default function MetricView() {
 
   const removeTypeLocal = (id: string) => {
     setMetricTypes((prev) => prev.filter((x) => x.metricTypeId !== id));
-    setTodayMetrics((prev) => prev.filter((m) => m.metricTypeId !== id));
-  };
-
-  const upsertTodayMetric = (m: Metric) => {
-    setTodayMetrics((prev) => {
-      const next = prev.filter((x) => x.metricTypeId !== m.metricTypeId);
-      return [m, ...next];
-    });
-  };
-
-  const removeTodayMetricById = (metricId: string) => {
-    setTodayMetrics((prev) => prev.filter((m) => m.metricId !== metricId));
+    setHistoryEntries((prev) => prev.filter((m) => m.metricTypeId !== id));
   };
 
   const setBusy = (metricTypeId: string, v: boolean) => {
@@ -189,6 +304,7 @@ export default function MetricView() {
       name: "",
       kind: "Boolean",
       unit: "",
+      hasGoal: false,
       goalCadence: 1,
       goalValue: "5",
     });
@@ -203,16 +319,19 @@ export default function MetricView() {
 
     const unit = createState.unit.trim() || undefined;
 
-    const goalValueNum = Number(createState.goalValue);
-    if (!Number.isFinite(goalValueNum) || goalValueNum < 0) {
-      return setErr("Goal must be a valid non-negative number.");
-    }
+    let gv = 0;
+    if (createState.hasGoal) {
+      const goalValueNum = Number(createState.goalValue);
+      if (!Number.isFinite(goalValueNum) || goalValueNum < 0) {
+        return setErr("Goal must be a valid non-negative number.");
+      }
 
-    let gv = Math.floor(goalValueNum);
-    if (createState.kind === "Boolean" && createState.goalCadence === 0)
-      gv = Math.min(1, gv);
-    if (createState.kind === "Boolean" && createState.goalCadence === 1)
-      gv = Math.min(7, gv);
+      gv = Math.floor(goalValueNum);
+      if (createState.kind === "Boolean" && createState.goalCadence === 0)
+        gv = Math.min(1, gv);
+      if (createState.kind === "Boolean" && createState.goalCadence === 1)
+        gv = Math.min(7, gv);
+    }
 
     const res = await createMetricType(
       name,
@@ -228,7 +347,7 @@ export default function MetricView() {
     closeCreate();
   };
 
-  // ----- Edit Metric Type (ALL PROPERTIES) -----
+  // ----- Edit Metric Type -----
 
   const openEdit = (mt: MetricType) => {
     setErr(null);
@@ -238,8 +357,9 @@ export default function MetricView() {
       name: mt.name ?? "",
       kind: mt.kind,
       unit: mt.unit ?? "",
+      hasGoal: (mt.goalValue ?? 0) > 0,
       goalCadence: mt.goalCadence ?? 1,
-      goalValue: String(mt.goalValue ?? 0),
+      goalValue: String(mt.goalValue ?? 0) || "5",
     });
   };
 
@@ -250,6 +370,7 @@ export default function MetricView() {
       name: "",
       kind: "Boolean",
       unit: "",
+      hasGoal: false,
       goalCadence: 1,
       goalValue: "5",
     });
@@ -269,20 +390,21 @@ export default function MetricView() {
 
     const unit = editState.unit.trim() || undefined;
 
-    const goalValueNum = Number(editState.goalValue);
-    if (!Number.isFinite(goalValueNum) || goalValueNum < 0) {
-      setBusy(mt.metricTypeId, false);
-      return setErr("Goal must be a valid non-negative number.");
+    let gv = 0;
+    if (editState.hasGoal) {
+      const goalValueNum = Number(editState.goalValue);
+      if (!Number.isFinite(goalValueNum) || goalValueNum < 0) {
+        setBusy(mt.metricTypeId, false);
+        return setErr("Goal must be a valid non-negative number.");
+      }
+
+      gv = Math.floor(goalValueNum);
+      if (editState.kind === "Boolean" && editState.goalCadence === 0)
+        gv = Math.min(1, gv);
+      if (editState.kind === "Boolean" && editState.goalCadence === 1)
+        gv = Math.min(7, gv);
     }
 
-    // Clamp boolean goals
-    let gv = Math.floor(goalValueNum);
-    if (editState.kind === "Boolean" && editState.goalCadence === 0)
-      gv = Math.min(1, gv);
-    if (editState.kind === "Boolean" && editState.goalCadence === 1)
-      gv = Math.min(7, gv);
-
-    // Snapshot + optimistic update in UI
     const snapshot = mt;
     const optimistic: MetricType = {
       ...mt,
@@ -305,7 +427,7 @@ export default function MetricView() {
       );
 
       if (!res.success) {
-        upsertType(snapshot); // rollback
+        upsertType(snapshot);
         setErr(res.error);
         return;
       }
@@ -323,154 +445,15 @@ export default function MetricView() {
     setErr(null);
 
     const snapshotTypes = metricTypes;
-    const snapshotToday = todayMetrics;
+    const snapshotHistory = historyEntries;
 
     removeTypeLocal(id);
 
     const res = await deleteMetricType(id);
     if (!res.success) {
       setMetricTypes(snapshotTypes);
-      setTodayMetrics(snapshotToday);
+      setHistoryEntries(snapshotHistory);
       setErr(res.error);
-    }
-  };
-
-  // ----- Boolean toggle today -----
-
-  const toggleBooleanToday = async (mt: MetricType) => {
-    setErr(null);
-    setBusy(mt.metricTypeId, true);
-
-    try {
-      const existing = todayByTypeId.get(mt.metricTypeId);
-
-      if (existing) {
-        removeTodayMetricById(existing.metricId);
-
-        const del = await deleteMetric(existing.metricId);
-        if (!del.success) {
-          upsertTodayMetric(existing);
-          setErr(del.error);
-        }
-        return;
-      }
-
-      const created = await logMetric(mt.metricTypeId, today, 1);
-      if (!created.success) return setErr(created.error);
-
-      upsertTodayMetric(created.data);
-    } finally {
-      setBusy(mt.metricTypeId, false);
-    }
-  };
-
-  // ----- Freely increase / decrease today (Number/Duration) -----
-  const changeTodayValue = async (mt: MetricType, delta: number) => {
-    setErr(null);
-    setBusy(mt.metricTypeId, true);
-
-    try {
-      const existing = todayByTypeId.get(mt.metricTypeId);
-      const current = existing?.value ?? 0;
-      const nextValue = Math.max(0, current + delta);
-
-      if (nextValue === current && existing) return;
-
-      if (existing) {
-        upsertTodayMetric({ ...existing, value: nextValue });
-      } else {
-        upsertTodayMetric({
-          metricId: "optimistic-" + mt.metricTypeId,
-          metricTypeId: mt.metricTypeId,
-          metricTypeName: mt.name,
-          date: today,
-          value: nextValue,
-        });
-      }
-
-      if (existing && !existing.metricId.startsWith("optimistic-")) {
-        const upd = await updateMetric(existing.metricId, nextValue);
-        if (!upd.success) {
-          upsertTodayMetric(existing);
-          setErr(upd.error);
-          return;
-        }
-        upsertTodayMetric(upd.data);
-      } else {
-        if (!existing && nextValue === 0) {
-          setTodayMetrics((prev) =>
-            prev.filter((m) => m.metricTypeId !== mt.metricTypeId)
-          );
-          return;
-        }
-
-        const created = await logMetric(mt.metricTypeId, today, nextValue);
-        if (!created.success) {
-          setTodayMetrics((prev) =>
-            prev.filter((m) => m.metricTypeId !== mt.metricTypeId)
-          );
-          setErr(created.error);
-          return;
-        }
-        upsertTodayMetric(created.data);
-      }
-    } finally {
-      setBusy(mt.metricTypeId, false);
-    }
-  };
-
-  const openSetValue = (mt: MetricType) => {
-    const existing = todayByTypeId.get(mt.metricTypeId);
-    setSetValueState({
-      open: true,
-      metricType: mt,
-      value: existing ? String(existing.value) : "",
-    });
-  };
-
-  const closeSetValue = () =>
-    setSetValueState({ open: false, metricType: null, value: "" });
-
-  const submitSetValue = async () => {
-    setErr(null);
-
-    const mt = setValueState.metricType;
-    if (!mt) return;
-
-    const v = Number(setValueState.value);
-    if (!Number.isFinite(v)) return setErr("Please enter a valid number.");
-
-    const existing = todayByTypeId.get(mt.metricTypeId);
-    const nextValue = Math.max(0, Math.floor(v));
-
-    setBusy(mt.metricTypeId, true);
-    try {
-      if (existing) upsertTodayMetric({ ...existing, value: nextValue });
-
-      if (existing) {
-        const upd = await updateMetric(existing.metricId, nextValue);
-        if (!upd.success) {
-          upsertTodayMetric(existing);
-          setErr(upd.error);
-          return;
-        }
-        upsertTodayMetric(upd.data);
-      } else {
-        if (nextValue === 0) {
-          closeSetValue();
-          return;
-        }
-        const created = await logMetric(mt.metricTypeId, today, nextValue);
-        if (!created.success) {
-          setErr(created.error);
-          return;
-        }
-        upsertTodayMetric(created.data);
-      }
-
-      closeSetValue();
-    } finally {
-      setBusy(mt.metricTypeId, false);
     }
   };
 
@@ -494,198 +477,382 @@ export default function MetricView() {
               Metrics
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Create metric types, edit goals, and adjust today’s values
-              instantly.
+              Manage your metric types and view history
             </Typography>
           </Box>
         </Stack>
 
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Chip
-            icon={<TodayIcon />}
-            label={new Date().toLocaleDateString(undefined, {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-            })}
-            variant="outlined"
-            sx={{ px: 1 }}
-          />
+        {tab === "types" && (
           <Button
             variant="contained"
             size="small"
-            startIcon={<PlaylistAddIcon />}
+            startIcon={<AddIcon />}
             sx={{ textTransform: "none", borderRadius: 2, fontWeight: 700 }}
             onClick={openCreate}
           >
-            New metric type
+            New metric
           </Button>
-        </Stack>
+        )}
       </Stack>
 
-      {err && (
-        <Paper
-          variant="outlined"
-          sx={{ p: 2, mb: 2, borderRadius: 2, borderColor: "error.light" }}
+      <Paper variant="outlined" sx={{ borderRadius: 3 }}>
+        <Tabs
+          value={tab}
+          onChange={(_, v) => {
+            setTab(v);
+            if (v === "history" && historyEntries.length === 0) {
+              void loadHistory();
+            }
+          }}
+          sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
         >
-          <Typography color="error" sx={{ fontWeight: 700 }}>
-            {err}
-          </Typography>
-        </Paper>
-      )}
+          <Tab
+            label="Types"
+            value="types"
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          />
+          <Tab
+            label="History"
+            value="history"
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          />
+        </Tabs>
 
-      <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography sx={{ fontWeight: 900, mb: 1 }}>
-          Your metric types
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
+        <Box sx={{ p: 2.25 }}>
+          {tab === "types" ? (
+            <>
+              {loading ? (
+                <Typography color="text.secondary">Loading…</Typography>
+              ) : metricTypes.length === 0 ? (
+                <Typography color="text.secondary">
+                  No metric types yet. Create one.
+                </Typography>
+              ) : (
+                <Stack spacing={1}>
+                  {metricTypes.map((mt) => {
+                    const busy = Boolean(busyByType[mt.metricTypeId]);
 
-        {loading ? (
-          <Typography color="text.secondary">Loading…</Typography>
-        ) : metricTypes.length === 0 ? (
-          <Typography color="text.secondary">
-            No metric types yet. Create one.
-          </Typography>
-        ) : (
-          <Stack spacing={1}>
-            {metricTypes.map((mt) => {
-              const isBoolean = mt.kind === "Boolean";
-              const entry = todayByTypeId.get(mt.metricTypeId);
-              const value = entry?.value ?? 0;
-              const busy = Boolean(busyByType[mt.metricTypeId]);
+                    return (
+                      <Paper
+                        key={mt.metricTypeId}
+                        variant="outlined"
+                        sx={{ p: 1.5, borderRadius: 2 }}
+                      >
+                        <Stack
+                          direction="row"
+                          spacing={1.5}
+                          alignItems="center"
+                        >
+                          <Box sx={{ flexGrow: 1 }}>
+                            <Stack
+                              direction="row"
+                              spacing={1}
+                              alignItems="center"
+                              flexWrap="wrap"
+                            >
+                              <Typography sx={{ fontWeight: 900 }}>
+                                {mt.name}
+                              </Typography>
+                              <Chip
+                                size="small"
+                                label={mt.kind}
+                                variant="outlined"
+                                sx={{ height: 20, fontSize: 11 }}
+                              />
+                              {(mt.kind === "Boolean" || mt.unit) && (
+                                <Chip
+                                  size="small"
+                                  label={
+                                    mt.kind === "Boolean" ? "log" : mt.unit
+                                  }
+                                  variant="outlined"
+                                  sx={{ height: 20, fontSize: 11 }}
+                                />
+                              )}
+                            </Stack>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {mt.goalValue > 0
+                                ? `Goal: ${mt.goalValue} ${
+                                    mt.unit ?? ""
+                                  } (${cadenceLabel(mt.goalCadence)})`.trim()
+                                : "No goal set"}
+                            </Typography>
+                          </Box>
 
-              return (
-                <Paper
-                  key={mt.metricTypeId}
-                  variant="outlined"
-                  sx={{ p: 2, borderRadius: 2 }}
+                          <Tooltip title="Edit">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={busy}
+                                onClick={() => openEdit(mt)}
+                                sx={{ color: "text.secondary" }}
+                              >
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+
+                          <Tooltip title="Delete">
+                            <span>
+                              <IconButton
+                                size="small"
+                                disabled={busy}
+                                onClick={() => void removeType(mt.metricTypeId)}
+                                sx={{ color: "text.secondary" }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </Stack>
+                      </Paper>
+                    );
+                  })}
+                </Stack>
+              )}
+            </>
+          ) : (
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              {/* Header with filters and add button */}
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                justifyContent="space-between"
+                alignItems={{ xs: "stretch", sm: "center" }}
+                spacing={{ xs: 2, sm: 1 }}
+                sx={{ mb: 2 }}
+              >
+                <TextField
+                  select
+                  size="small"
+                  value={historyFilter}
+                  onChange={(e) => {
+                    setHistoryFilter(e.target.value);
+                    setHistoryPage(0);
+                  }}
+                  sx={{ minWidth: 130 }}
                 >
-                  <Stack direction="row" spacing={2} alignItems="center">
-                    {/* Info */}
-                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        alignItems="center"
-                        flexWrap="wrap"
-                      >
-                        <Typography sx={{ fontWeight: 900 }}>
-                          {mt.name}
-                        </Typography>
-                        <Chip
-                          size="small"
-                          label={mt.kind}
-                          variant="outlined"
-                          sx={{ height: 20, fontSize: 11 }}
-                        />
-                        {mt.unit && (
-                          <Chip
-                            size="small"
-                            label={mt.unit}
-                            variant="outlined"
-                            sx={{ height: 20, fontSize: 11 }}
-                          />
-                        )}
-                      </Stack>
-                      <Typography variant="caption" color="text.secondary">
-                        {mt.goalValue > 0
-                          ? `Goal: ${mt.goalValue} ${
-                              mt.unit ?? ""
-                            } (${cadenceLabel(mt.goalCadence)})`
-                          : "No goal set"}
-                      </Typography>
-                    </Box>
+                  <MenuItem value="all">All metrics</MenuItem>
+                  {metricTypes.map((mt) => (
+                    <MenuItem key={mt.metricTypeId} value={mt.metricTypeId}>
+                      {mt.name}
+                    </MenuItem>
+                  ))}
+                </TextField>
 
-                    {/* Today's value control */}
-                    {isBoolean ? (
-                      <Button
-                        disabled={busy}
-                        variant={entry ? "contained" : "outlined"}
-                        size="small"
-                        sx={{
-                          textTransform: "none",
-                          borderRadius: 2,
-                          fontWeight: 700,
-                          minWidth: 90,
-                        }}
-                        onClick={() => void toggleBooleanToday(mt)}
-                      >
-                        {entry ? "Done" : "Mark done"}
-                      </Button>
-                    ) : (
-                      <Stack
-                        direction="row"
-                        alignItems="center"
-                        sx={{
-                          border: 1,
-                          borderColor: "divider",
-                          borderRadius: 2,
-                          px: 0.5,
-                        }}
-                      >
-                        <IconButton
-                          size="small"
-                          disabled={busy || value <= 0}
-                          onClick={() => void changeTodayValue(mt, -1)}
-                          aria-label="decrease"
-                        >
-                          <RemoveIcon fontSize="small" />
-                        </IconButton>
+                <Stack direction="row" spacing={1}>
+                  <DatePicker
+                    label="From"
+                    value={dateFrom}
+                    onChange={(v) => setDateFrom(v)}
+                    slotProps={{
+                      textField: { size: "small", sx: { minWidth: 150 } },
+                    }}
+                  />
+                  <DatePicker
+                    label="To"
+                    value={dateTo}
+                    onChange={(v) => setDateTo(v)}
+                    slotProps={{
+                      textField: { size: "small", sx: { minWidth: 150 } },
+                    }}
+                  />
+                </Stack>
+              </Stack>
 
-                        <Typography
-                          sx={{
-                            minWidth: 40,
-                            textAlign: "center",
-                            fontWeight: 900,
-                            fontSize: 14,
-                            cursor: "pointer",
-                          }}
-                          onClick={() => openSetValue(mt)}
-                        >
-                          {value}
-                        </Typography>
+              <Divider sx={{ mb: 2 }} />
 
-                        <IconButton
-                          size="small"
-                          disabled={busy}
-                          onClick={() => void changeTodayValue(mt, +1)}
-                          aria-label="increase"
-                        >
-                          <AddIcon fontSize="small" />
-                        </IconButton>
-                      </Stack>
-                    )}
+              {historyLoading ? (
+                <Typography color="text.secondary">Loading…</Typography>
+              ) : groupedByDate.length === 0 ? (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 3,
+                    borderRadius: 2,
+                    textAlign: "center",
+                    borderStyle: "dashed",
+                  }}
+                >
+                  <Typography color="text.secondary" sx={{ mb: 1 }}>
+                    No entries in this date range
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={() => openLogDialog()}
+                    sx={{ textTransform: "none" }}
+                  >
+                    Log an entry
+                  </Button>
+                </Paper>
+              ) : (
+                <>
+                  <Stack spacing={2}>
+                    {paginatedDates.map(([dateKey, entries]) => {
+                      const dateObj = new Date(dateKey + "T12:00:00");
+                      const formattedDate = dateObj.toLocaleDateString(
+                        undefined,
+                        {
+                          weekday: "long",
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        }
+                      );
 
-                    {/* Actions */}
-                    <Stack direction="row" spacing={0.5}>
+                      return (
+                        <Box key={dateKey}>
+                          {/* Date header */}
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="center"
+                            sx={{ mb: 1 }}
+                          >
+                            <Typography
+                              variant="subtitle2"
+                              sx={{ fontWeight: 700 }}
+                            >
+                              {formattedDate}
+                            </Typography>
+                            <Tooltip title={`Add entry for ${formattedDate}`}>
+                              <IconButton
+                                size="small"
+                                onClick={() => openLogDialog(dateKey)}
+                                sx={{ color: "primary.main" }}
+                              >
+                                <AddIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
+
+                          {/* Entries for this date */}
+                          <Stack spacing={0.75}>
+                            {entries.map((entry) => {
+                              const mt = metricTypes.find(
+                                (m) => m.metricTypeId === entry.metricTypeId
+                              );
+                              const subtitle =
+                                mt?.kind === "Boolean"
+                                  ? "completed"
+                                  : `${entry.value}${
+                                      mt?.unit ? ` ${mt.unit}` : ""
+                                    }`;
+
+                              return (
+                                <Paper
+                                  key={entry.metricId}
+                                  variant="outlined"
+                                  sx={{ p: 1.25, borderRadius: 2 }}
+                                >
+                                  <Stack
+                                    direction="row"
+                                    justifyContent="space-between"
+                                    alignItems="center"
+                                  >
+                                    <Box>
+                                      <Typography
+                                        variant="body2"
+                                        sx={{ fontWeight: 700 }}
+                                      >
+                                        {entry.metricTypeName}
+                                      </Typography>
+                                      <Typography
+                                        variant="caption"
+                                        color="text.secondary"
+                                      >
+                                        {subtitle}
+                                      </Typography>
+                                    </Box>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() =>
+                                        void deleteHistoryEntry(entry.metricId)
+                                      }
+                                      aria-label="delete"
+                                      sx={{ color: "text.secondary" }}
+                                    >
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </Stack>
+                                </Paper>
+                              );
+                            })}
+                          </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <Stack
+                      direction="row"
+                      justifyContent="center"
+                      alignItems="center"
+                      spacing={1}
+                      sx={{ mt: 2 }}
+                    >
                       <IconButton
                         size="small"
-                        disabled={busy}
-                        onClick={() => openEdit(mt)}
-                        aria-label="edit"
-                        sx={{ color: "text.secondary" }}
+                        disabled={historyPage === 0}
+                        onClick={() => setHistoryPage((p) => p - 1)}
                       >
-                        <EditIcon fontSize="small" />
+                        <ChevronLeftIcon />
                       </IconButton>
+                      <Typography variant="body2" color="text.secondary">
+                        {historyPage + 1} / {totalPages}
+                      </Typography>
                       <IconButton
                         size="small"
-                        disabled={busy}
-                        onClick={() => void removeType(mt.metricTypeId)}
-                        aria-label="delete"
-                        sx={{ color: "text.secondary" }}
+                        disabled={historyPage >= totalPages - 1}
+                        onClick={() => setHistoryPage((p) => p + 1)}
                       >
-                        <DeleteIcon fontSize="small" />
+                        <ChevronRightIcon />
                       </IconButton>
                     </Stack>
-                  </Stack>
-                </Paper>
-              );
-            })}
-          </Stack>
-        )}
+                  )}
+
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", textAlign: "center", mt: 1 }}
+                  >
+                    {filteredHistory.length} entries across{" "}
+                    {groupedByDate.length} days
+                  </Typography>
+                </>
+              )}
+            </LocalizationProvider>
+          )}
+        </Box>
       </Paper>
 
-      {/* Create Metric Type */}
+      {/* Log Entry Dialog */}
+      <LogEntryDialog
+        open={logDialog.open}
+        onClose={closeLogDialog}
+        onSubmit={() => void submitLog()}
+        metricTypes={metricTypes}
+        selectedMetricType={logDialog.metricType}
+        onMetricTypeChange={(mt) =>
+          setLogDialog((s) => ({
+            ...s,
+            metricType: mt,
+            value: mt?.kind === "Boolean" ? "1" : "",
+          }))
+        }
+        date={logDialog.date}
+        onDateChange={(date) => setLogDialog((s) => ({ ...s, date }))}
+        value={logDialog.value}
+        onValueChange={(value) => setLogDialog((s) => ({ ...s, value }))}
+      />
+
+      {/* Create Metric Type Dialog */}
       <Dialog
         open={createState.open}
         onClose={closeCreate}
@@ -713,61 +880,81 @@ export default function MetricView() {
                 setCreateState((s) => ({
                   ...s,
                   kind: e.target.value as CreateState["kind"],
+                  unit: e.target.value === "Boolean" ? "" : s.unit,
                 }))
               }
               fullWidth
             >
-              <MenuItem value="Boolean">Boolean (done / not done)</MenuItem>
+              <MenuItem value="Boolean">Boolean (yes / no)</MenuItem>
               <MenuItem value="Number">Number (count / score)</MenuItem>
               <MenuItem value="Duration">Duration (minutes)</MenuItem>
             </TextField>
 
-            <TextField
-              label="Unit (optional)"
-              value={createState.unit}
-              onChange={(e) =>
-                setCreateState((s) => ({ ...s, unit: e.target.value }))
+            {createState.kind !== "Boolean" && (
+              <TextField
+                label="Unit (optional)"
+                value={createState.unit}
+                onChange={(e) =>
+                  setCreateState((s) => ({ ...s, unit: e.target.value }))
+                }
+                fullWidth
+                placeholder="e.g., cups, pages, minutes"
+              />
+            )}
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={createState.hasGoal}
+                  onChange={(e) =>
+                    setCreateState((s) => ({ ...s, hasGoal: e.target.checked }))
+                  }
+                />
               }
-              fullWidth
-              placeholder="e.g., cups, pages, minutes"
+              label="Set a goal"
             />
 
-            <TextField
-              label="Goal cadence"
-              select
-              value={createState.goalCadence}
-              onChange={(e) =>
-                setCreateState((s) => ({
-                  ...s,
-                  goalCadence: Number(e.target.value) as GoalCadence,
-                }))
-              }
-              fullWidth
-            >
-              <MenuItem value={0}>Daily</MenuItem>
-              <MenuItem value={1}>Weekly</MenuItem>
-            </TextField>
+            {createState.hasGoal && (
+              <>
+                <TextField
+                  label="Goal cadence"
+                  select
+                  value={createState.goalCadence}
+                  onChange={(e) =>
+                    setCreateState((s) => ({
+                      ...s,
+                      goalCadence: Number(e.target.value) as GoalCadence,
+                    }))
+                  }
+                  fullWidth
+                >
+                  <MenuItem value={0}>Daily</MenuItem>
+                  <MenuItem value={1}>Weekly</MenuItem>
+                </TextField>
 
-            <TextField
-              label={
-                createState.kind === "Boolean" && createState.goalCadence === 1
-                  ? "Goal (days per week)"
-                  : createState.goalCadence === 0
-                  ? "Goal (per day)"
-                  : "Goal (per week)"
-              }
-              value={createState.goalValue}
-              onChange={(e) =>
-                setCreateState((s) => ({ ...s, goalValue: e.target.value }))
-              }
-              fullWidth
-              inputMode="numeric"
-              helperText={
-                createState.kind === "Boolean"
-                  ? "Boolean goals work best as weekly days (e.g., 5 days/week)."
-                  : "Set a numeric target for the selected cadence."
-              }
-            />
+                <TextField
+                  label={
+                    createState.kind === "Boolean" &&
+                    createState.goalCadence === 1
+                      ? "Goal (days per week)"
+                      : createState.goalCadence === 0
+                      ? "Goal (per day)"
+                      : "Goal (per week)"
+                  }
+                  value={createState.goalValue}
+                  onChange={(e) =>
+                    setCreateState((s) => ({ ...s, goalValue: e.target.value }))
+                  }
+                  fullWidth
+                  inputMode="numeric"
+                  helperText={
+                    createState.kind === "Boolean"
+                      ? "Boolean goals work best as weekly days (e.g., 5 days/week)."
+                      : "Set a numeric target for the selected cadence."
+                  }
+                />
+              </>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -784,7 +971,7 @@ export default function MetricView() {
         </DialogActions>
       </Dialog>
 
-      {/* Edit Metric Type */}
+      {/* Edit Metric Type Dialog */}
       <Dialog open={editState.open} onClose={closeEdit} maxWidth="xs" fullWidth>
         <DialogTitle>Edit metric type</DialogTitle>
         <DialogContent>
@@ -807,61 +994,80 @@ export default function MetricView() {
                 setEditState((s) => ({
                   ...s,
                   kind: e.target.value as EditState["kind"],
+                  unit: e.target.value === "Boolean" ? "" : s.unit,
                 }))
               }
               fullWidth
             >
-              <MenuItem value="Boolean">Boolean (done / not done)</MenuItem>
+              <MenuItem value="Boolean">Boolean (yes / no)</MenuItem>
               <MenuItem value="Number">Number (count / score)</MenuItem>
               <MenuItem value="Duration">Duration (minutes)</MenuItem>
             </TextField>
 
-            <TextField
-              label="Unit (optional)"
-              value={editState.unit}
-              onChange={(e) =>
-                setEditState((s) => ({ ...s, unit: e.target.value }))
+            {editState.kind !== "Boolean" && (
+              <TextField
+                label="Unit (optional)"
+                value={editState.unit}
+                onChange={(e) =>
+                  setEditState((s) => ({ ...s, unit: e.target.value }))
+                }
+                fullWidth
+                placeholder="e.g., cups, pages, minutes"
+              />
+            )}
+
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={editState.hasGoal}
+                  onChange={(e) =>
+                    setEditState((s) => ({ ...s, hasGoal: e.target.checked }))
+                  }
+                />
               }
-              fullWidth
-              placeholder="e.g., cups, pages, minutes"
+              label="Set a goal"
             />
 
-            <TextField
-              label="Goal cadence"
-              select
-              value={editState.goalCadence}
-              onChange={(e) =>
-                setEditState((s) => ({
-                  ...s,
-                  goalCadence: Number(e.target.value) as GoalCadence,
-                }))
-              }
-              fullWidth
-            >
-              <MenuItem value={0}>Daily</MenuItem>
-              <MenuItem value={1}>Weekly</MenuItem>
-            </TextField>
+            {editState.hasGoal && (
+              <>
+                <TextField
+                  label="Goal cadence"
+                  select
+                  value={editState.goalCadence}
+                  onChange={(e) =>
+                    setEditState((s) => ({
+                      ...s,
+                      goalCadence: Number(e.target.value) as GoalCadence,
+                    }))
+                  }
+                  fullWidth
+                >
+                  <MenuItem value={0}>Daily</MenuItem>
+                  <MenuItem value={1}>Weekly</MenuItem>
+                </TextField>
 
-            <TextField
-              label={
-                editState.kind === "Boolean" && editState.goalCadence === 1
-                  ? "Goal (days per week)"
-                  : editState.goalCadence === 0
-                  ? "Goal (per day)"
-                  : "Goal (per week)"
-              }
-              value={editState.goalValue}
-              onChange={(e) =>
-                setEditState((s) => ({ ...s, goalValue: e.target.value }))
-              }
-              fullWidth
-              inputMode="numeric"
-              helperText={
-                editState.kind === "Boolean"
-                  ? "Boolean goals are clamped: Daily ≤ 1, Weekly ≤ 7."
-                  : "Numeric target for the selected cadence."
-              }
-            />
+                <TextField
+                  label={
+                    editState.kind === "Boolean" && editState.goalCadence === 1
+                      ? "Goal (days per week)"
+                      : editState.goalCadence === 0
+                      ? "Goal (per day)"
+                      : "Goal (per week)"
+                  }
+                  value={editState.goalValue}
+                  onChange={(e) =>
+                    setEditState((s) => ({ ...s, goalValue: e.target.value }))
+                  }
+                  fullWidth
+                  inputMode="numeric"
+                  helperText={
+                    editState.kind === "Boolean"
+                      ? "Boolean goals are clamped: Daily ≤ 1, Weekly ≤ 7."
+                      : "Numeric target for the selected cadence."
+                  }
+                />
+              </>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -878,52 +1084,22 @@ export default function MetricView() {
         </DialogActions>
       </Dialog>
 
-      {/* Set Value Dialog */}
-      <Dialog
-        open={setValueState.open}
-        onClose={closeSetValue}
-        maxWidth="xs"
-        fullWidth
+      {/* Error Snackbar */}
+      <Snackbar
+        open={Boolean(err)}
+        autoHideDuration={5000}
+        onClose={() => setErr(null)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
       >
-        <DialogTitle>Set today’s value</DialogTitle>
-        <DialogContent>
-          <Stack spacing={1.5} sx={{ mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              {setValueState.metricType?.name} •{" "}
-              {setValueState.metricType?.kind}
-              {setValueState.metricType?.unit
-                ? ` • ${setValueState.metricType.unit}`
-                : ""}
-            </Typography>
-
-            <TextField
-              label={
-                setValueState.metricType?.kind === "Duration"
-                  ? "Minutes"
-                  : "Value"
-              }
-              value={setValueState.value}
-              onChange={(e) =>
-                setSetValueState((s) => ({ ...s, value: e.target.value }))
-              }
-              fullWidth
-              inputMode="numeric"
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={closeSetValue} sx={{ textTransform: "none" }}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => void submitSetValue()}
-            variant="contained"
-            sx={{ textTransform: "none" }}
-          >
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
+        <Alert
+          onClose={() => setErr(null)}
+          severity="error"
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {err}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

@@ -4,21 +4,21 @@ import {
   Button,
   Checkbox,
   Chip,
+  LinearProgress,
+  Paper,
+  Stack,
+  Typography,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
-  LinearProgress,
-  Paper,
-  Stack,
   TextField,
-  Typography,
+  MenuItem,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import AddIcon from "@mui/icons-material/Add";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -26,6 +26,7 @@ import {
   getMetrics,
   logMetric,
   deleteMetric,
+  createMetricType,
   type MetricType,
   type Metric,
   type GoalCadence,
@@ -56,6 +57,15 @@ type LogDialogState = {
   value: string;
 };
 
+type CreateState = {
+  open: boolean;
+  name: string;
+  kind: "Duration" | "Number" | "Boolean";
+  unit: string;
+  goalCadence: GoalCadence;
+  goalValue: string;
+};
+
 export default function Home() {
   const navigate = useNavigate();
 
@@ -71,6 +81,15 @@ export default function Home() {
     metricType: null,
     date: isoDate(new Date()),
     value: "",
+  });
+
+  const [createState, setCreateState] = useState<CreateState>({
+    open: false,
+    name: "",
+    kind: "Boolean",
+    unit: "",
+    goalCadence: 1,
+    goalValue: "5",
   });
 
   const upsertMetricInState = (metric: Metric) => {
@@ -133,6 +152,55 @@ export default function Home() {
     if (showLoading) setInitialLoading(false);
   };
 
+  // Create Metric
+  const openCreate = () =>
+    setCreateState({
+      open: true,
+      name: "",
+      kind: "Boolean",
+      unit: "",
+      goalCadence: 1,
+      goalValue: "5",
+    });
+
+  const closeCreate = () => setCreateState((s) => ({ ...s, open: false }));
+
+  const submitCreate = async () => {
+    setErr(null);
+
+    const name = createState.name.trim();
+    if (!name) return setErr("Please enter a metric name.");
+
+    const unit = createState.unit.trim() || undefined;
+
+    const goalValueNum = Number(createState.goalValue);
+    if (!Number.isFinite(goalValueNum) || goalValueNum < 0) {
+      return setErr("Goal must be a valid non-negative number.");
+    }
+
+    let gv = Math.floor(goalValueNum);
+    if (createState.kind === "Boolean" && createState.goalCadence === 0)
+      gv = Math.min(1, gv);
+    if (createState.kind === "Boolean" && createState.goalCadence === 1)
+      gv = Math.min(7, gv);
+
+    const res = await createMetricType(
+      name,
+      createState.kind,
+      unit,
+      createState.goalCadence,
+      gv
+    );
+
+    if (!res.success) return setErr(res.error);
+
+    setMetricTypes((prev) =>
+      [...prev, res.data].sort((a, b) => a.name.localeCompare(b.name))
+    );
+    closeCreate();
+  };
+
+  // Initial load
   useEffect(() => {
     void refresh({ showLoading: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -429,16 +497,6 @@ export default function Home() {
               >
                 {Math.round(todayPct * 100)}%
               </Typography>
-
-              <Button
-                variant="contained"
-                size="small"
-                startIcon={<PlaylistAddIcon />}
-                sx={{ textTransform: "none", borderRadius: 2, fontWeight: 700 }}
-                onClick={() => navigate("/metrics")}
-              >
-                New metric
-              </Button>
             </Stack>
           </Paper>
         </Grid>
@@ -455,12 +513,17 @@ export default function Home() {
               <Stack
                 direction="row"
                 justifyContent="space-between"
-                alignItems="center"
+                alignItems="flex-start"
                 sx={{ mb: 2 }}
               >
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                  Today
-                </Typography>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                    Log today
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Check off habits and record values
+                  </Typography>
+                </Box>
                 <Chip
                   size="small"
                   icon={<CalendarMonthIcon />}
@@ -541,6 +604,36 @@ export default function Home() {
                       </Paper>
                     );
                   })}
+                  <Paper
+                    variant="outlined"
+                    onClick={openCreate}
+                    sx={{
+                      p: 1.25,
+                      borderRadius: 2,
+                      borderStyle: "dashed",
+                      borderWidth: 2,
+                      borderColor: "primary.light",
+                      cursor: "pointer",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Box
+                        sx={{
+                          width: 42,
+                          height: 42,
+                          display: "grid",
+                          placeItems: "center",
+                          color: "primary.light",
+                        }}
+                      >
+                        <AddIcon />
+                      </Box>
+                      <Typography variant="body2" color="primary.light">
+                        Add a new metric
+                      </Typography>
+                    </Stack>
+                  </Paper>
                 </Stack>
               )}
             </Paper>
@@ -673,6 +766,112 @@ export default function Home() {
           >
             Save
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={createState.open}
+        onClose={closeCreate}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>New metric</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Name"
+              value={createState.name}
+              onChange={(e) =>
+                setCreateState((s) => ({ ...s, name: e.target.value }))
+              }
+              fullWidth
+              autoFocus
+              placeholder="e.g., Sleep, Coffee, Mood"
+            />
+
+            <TextField
+              label="Kind"
+              select
+              value={createState.kind}
+              onChange={(e) =>
+                setCreateState((s) => ({
+                  ...s,
+                  kind: e.target.value as CreateState["kind"],
+                }))
+              }
+              fullWidth
+            >
+              <MenuItem value="Boolean">Boolean (done / not done)</MenuItem>
+              <MenuItem value="Number">Number (count / score)</MenuItem>
+              <MenuItem value="Duration">Duration (minutes)</MenuItem>
+            </TextField>
+
+            <TextField
+              label="Unit (optional)"
+              value={createState.unit}
+              onChange={(e) =>
+                setCreateState((s) => ({ ...s, unit: e.target.value }))
+              }
+              fullWidth
+              placeholder="e.g., cups, pages, hours"
+            />
+
+            <TextField
+              label="Goal cadence"
+              select
+              value={createState.goalCadence}
+              onChange={(e) =>
+                setCreateState((s) => ({
+                  ...s,
+                  goalCadence: Number(e.target.value) as GoalCadence,
+                }))
+              }
+              fullWidth
+            >
+              <MenuItem value={0}>Daily</MenuItem>
+              <MenuItem value={1}>Weekly</MenuItem>
+            </TextField>
+
+            <TextField
+              label={
+                createState.kind === "Boolean" && createState.goalCadence === 1
+                  ? "Goal (days per week)"
+                  : createState.goalCadence === 0
+                  ? "Goal (per day)"
+                  : "Goal (per week)"
+              }
+              value={createState.goalValue}
+              onChange={(e) =>
+                setCreateState((s) => ({ ...s, goalValue: e.target.value }))
+              }
+              fullWidth
+              inputMode="numeric"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: "space-between", px: 3, pb: 2 }}>
+          <Button
+            size="small"
+            onClick={() => {
+              closeCreate();
+              navigate("/metrics");
+            }}
+            sx={{ textTransform: "none" }}
+          >
+            Manage metrics →
+          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button onClick={closeCreate} sx={{ textTransform: "none" }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void submitCreate()}
+              variant="contained"
+              sx={{ textTransform: "none" }}
+            >
+              Create
+            </Button>
+          </Stack>
         </DialogActions>
       </Dialog>
     </Box>

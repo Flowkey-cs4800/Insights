@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Box,
   Button,
@@ -14,16 +15,14 @@ import {
   Stack,
   TextField,
   Typography,
-  Tooltip,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import RemoveIcon from "@mui/icons-material/Remove";
-import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import TodayIcon from "@mui/icons-material/Today";
 import EditIcon from "@mui/icons-material/Edit";
-import { useNavigate } from "react-router-dom";
 
 import {
   createMetricType,
@@ -141,10 +140,12 @@ export default function MetricView() {
     setLoading(false);
   };
 
+  const location = useLocation();
+
   useEffect(() => {
     void initialLoad();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.key]);
 
   // ----- Local state helpers -----
 
@@ -208,8 +209,10 @@ export default function MetricView() {
     }
 
     let gv = Math.floor(goalValueNum);
-    if (createState.kind === "Boolean" && createState.goalCadence === 0) gv = Math.min(1, gv);
-    if (createState.kind === "Boolean" && createState.goalCadence === 1) gv = Math.min(7, gv);
+    if (createState.kind === "Boolean" && createState.goalCadence === 0)
+      gv = Math.min(1, gv);
+    if (createState.kind === "Boolean" && createState.goalCadence === 1)
+      gv = Math.min(7, gv);
 
     const res = await createMetricType(
       name,
@@ -274,8 +277,10 @@ export default function MetricView() {
 
     // Clamp boolean goals
     let gv = Math.floor(goalValueNum);
-    if (editState.kind === "Boolean" && editState.goalCadence === 0) gv = Math.min(1, gv);
-    if (editState.kind === "Boolean" && editState.goalCadence === 1) gv = Math.min(7, gv);
+    if (editState.kind === "Boolean" && editState.goalCadence === 0)
+      gv = Math.min(1, gv);
+    if (editState.kind === "Boolean" && editState.goalCadence === 1)
+      gv = Math.min(7, gv);
 
     // Snapshot + optimistic update in UI
     const snapshot = mt;
@@ -393,13 +398,17 @@ export default function MetricView() {
         upsertTodayMetric(upd.data);
       } else {
         if (!existing && nextValue === 0) {
-          setTodayMetrics((prev) => prev.filter((m) => m.metricTypeId !== mt.metricTypeId));
+          setTodayMetrics((prev) =>
+            prev.filter((m) => m.metricTypeId !== mt.metricTypeId)
+          );
           return;
         }
 
         const created = await logMetric(mt.metricTypeId, today, nextValue);
         if (!created.success) {
-          setTodayMetrics((prev) => prev.filter((m) => m.metricTypeId !== mt.metricTypeId));
+          setTodayMetrics((prev) =>
+            prev.filter((m) => m.metricTypeId !== mt.metricTypeId)
+          );
           setErr(created.error);
           return;
         }
@@ -467,9 +476,17 @@ export default function MetricView() {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="space-between"
+        sx={{ mb: 2 }}
+      >
         <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton onClick={() => navigate("/dashboard")} aria-label="back to dashboard">
+          <IconButton
+            onClick={() => navigate("/dashboard")}
+            aria-label="back to dashboard"
+          >
             <ArrowBackIcon />
           </IconButton>
           <Box>
@@ -477,17 +494,28 @@ export default function MetricView() {
               Metrics
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Create metric types, edit goals, and adjust today’s values instantly.
+              Create metric types, edit goals, and adjust today’s values
+              instantly.
             </Typography>
           </Box>
         </Stack>
 
         <Stack direction="row" spacing={1} alignItems="center">
-          <Chip icon={<TodayIcon />} label={today} variant="outlined" />
+          <Chip
+            icon={<TodayIcon />}
+            label={new Date().toLocaleDateString(undefined, {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+            })}
+            variant="outlined"
+            sx={{ px: 1 }}
+          />
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
-            sx={{ textTransform: "none", borderRadius: 2, fontWeight: 800 }}
+            size="small"
+            startIcon={<PlaylistAddIcon />}
+            sx={{ textTransform: "none", borderRadius: 2, fontWeight: 700 }}
             onClick={openCreate}
           >
             New metric type
@@ -496,7 +524,10 @@ export default function MetricView() {
       </Stack>
 
       {err && (
-        <Paper variant="outlined" sx={{ p: 2, mb: 2, borderRadius: 2, borderColor: "error.light" }}>
+        <Paper
+          variant="outlined"
+          sx={{ p: 2, mb: 2, borderRadius: 2, borderColor: "error.light" }}
+        >
           <Typography color="error" sx={{ fontWeight: 700 }}>
             {err}
           </Typography>
@@ -504,13 +535,17 @@ export default function MetricView() {
       )}
 
       <Paper variant="outlined" sx={{ p: 2.25, borderRadius: 3 }}>
-        <Typography sx={{ fontWeight: 900, mb: 1 }}>Your metric types</Typography>
+        <Typography sx={{ fontWeight: 900, mb: 1 }}>
+          Your metric types
+        </Typography>
         <Divider sx={{ mb: 2 }} />
 
         {loading ? (
           <Typography color="text.secondary">Loading…</Typography>
         ) : metricTypes.length === 0 ? (
-          <Typography color="text.secondary">No metric types yet. Create one.</Typography>
+          <Typography color="text.secondary">
+            No metric types yet. Create one.
+          </Typography>
         ) : (
           <Stack spacing={1}>
             {metricTypes.map((mt) => {
@@ -520,104 +555,127 @@ export default function MetricView() {
               const busy = Boolean(busyByType[mt.metricTypeId]);
 
               return (
-                <Paper key={mt.metricTypeId} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
-                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25} alignItems={{ sm: "center" }}>
-                    <Box sx={{ flexGrow: 1 }}>
-                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                        <Typography sx={{ fontWeight: 900 }}>{mt.name}</Typography>
-                        <Chip size="small" label={mt.kind} variant="outlined" sx={{ fontWeight: 800 }} />
-                        {mt.unit ? <Chip size="small" label={mt.unit} variant="outlined" /> : null}
-                        {mt.goalValue > 0 ? (
+                <Paper
+                  key={mt.metricTypeId}
+                  variant="outlined"
+                  sx={{ p: 2, borderRadius: 2 }}
+                >
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    {/* Info */}
+                    <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        alignItems="center"
+                        flexWrap="wrap"
+                      >
+                        <Typography sx={{ fontWeight: 900 }}>
+                          {mt.name}
+                        </Typography>
+                        <Chip
+                          size="small"
+                          label={mt.kind}
+                          variant="outlined"
+                          sx={{ height: 20, fontSize: 11 }}
+                        />
+                        {mt.unit && (
                           <Chip
                             size="small"
-                            label={`Goal: ${mt.goalValue} (${cadenceLabel(mt.goalCadence)})`}
+                            label={mt.unit}
                             variant="outlined"
+                            sx={{ height: 20, fontSize: 11 }}
                           />
-                        ) : (
-                          <Chip size="small" label="No goal" variant="outlined" />
                         )}
                       </Stack>
-
                       <Typography variant="caption" color="text.secondary">
-                        Today: {isBoolean ? (entry ? "Done" : "Not done") : `Value ${value}`}
+                        {mt.goalValue > 0
+                          ? `Goal: ${mt.goalValue} ${
+                              mt.unit ?? ""
+                            } (${cadenceLabel(mt.goalCadence)})`
+                          : "No goal set"}
                       </Typography>
                     </Box>
 
-                    <Stack direction="row" spacing={1} alignItems="center" justifyContent="flex-end">
-                      {/* Edit metric type */}
-                      <Tooltip title="Edit metric type">
-                        <span>
-                          <IconButton
-                            disabled={busy}
-                            aria-label="edit metric type"
-                            onClick={() => openEdit(mt)}
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-
-                      {isBoolean ? (
-                        <Button
-                          disabled={busy}
-                          variant={entry ? "contained" : "outlined"}
-                          sx={{ textTransform: "none", borderRadius: 2, fontWeight: 800 }}
-                          onClick={() => void toggleBooleanToday(mt)}
+                    {/* Today's value control */}
+                    {isBoolean ? (
+                      <Button
+                        disabled={busy}
+                        variant={entry ? "contained" : "outlined"}
+                        size="small"
+                        sx={{
+                          textTransform: "none",
+                          borderRadius: 2,
+                          fontWeight: 700,
+                          minWidth: 90,
+                        }}
+                        onClick={() => void toggleBooleanToday(mt)}
+                      >
+                        {entry ? "Done" : "Mark done"}
+                      </Button>
+                    ) : (
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        sx={{
+                          border: 1,
+                          borderColor: "divider",
+                          borderRadius: 2,
+                          px: 0.5,
+                        }}
+                      >
+                        <IconButton
+                          size="small"
+                          disabled={busy || value <= 0}
+                          onClick={() => void changeTodayValue(mt, -1)}
+                          aria-label="decrease"
                         >
-                          {entry ? "Done" : "Mark done"}
-                        </Button>
-                      ) : (
-                        <>
-                          <Tooltip title="Decrease">
-                            <span>
-                              <IconButton
-                                disabled={busy || value <= 0}
-                                onClick={() => void changeTodayValue(mt, -1)}
-                                aria-label="decrease"
-                              >
-                                <RemoveIcon />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
+                          <RemoveIcon fontSize="small" />
+                        </IconButton>
 
-                          <Typography sx={{ minWidth: 52, textAlign: "center", fontWeight: 900 }}>
-                            {value}
-                          </Typography>
+                        <Typography
+                          sx={{
+                            minWidth: 40,
+                            textAlign: "center",
+                            fontWeight: 900,
+                            fontSize: 14,
+                            cursor: "pointer",
+                          }}
+                          onClick={() => openSetValue(mt)}
+                        >
+                          {value}
+                        </Typography>
 
-                          <Tooltip title="Increase">
-                            <span>
-                              <IconButton
-                                disabled={busy}
-                                onClick={() => void changeTodayValue(mt, +1)}
-                                aria-label="increase"
-                              >
-                                <AddCircleOutlineIcon />
-                              </IconButton>
-                            </span>
-                          </Tooltip>
+                        <IconButton
+                          size="small"
+                          disabled={busy}
+                          onClick={() => void changeTodayValue(mt, +1)}
+                          aria-label="increase"
+                        >
+                          <AddIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    )}
 
-                          <Button
-                            disabled={busy}
-                            variant="outlined"
-                            sx={{ textTransform: "none", borderRadius: 2, fontWeight: 800 }}
-                            onClick={() => openSetValue(mt)}
-                          >
-                            Set
-                          </Button>
-                        </>
-                      )}
-
-                      <Tooltip title="Delete metric type">
-                        <span>
-                          <IconButton
-                            disabled={busy}
-                            aria-label="delete metric type"
-                            onClick={() => void removeType(mt.metricTypeId)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
+                    {/* Actions */}
+                    <Stack direction="row" spacing={0.5}>
+                      <IconButton
+                        size="small"
+                        disabled={busy}
+                        onClick={() => openEdit(mt)}
+                        aria-label="edit"
+                        sx={{ color: "text.secondary" }}
+                      >
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        disabled={busy}
+                        onClick={() => void removeType(mt.metricTypeId)}
+                        aria-label="delete"
+                        sx={{ color: "text.secondary" }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
                     </Stack>
                   </Stack>
                 </Paper>
@@ -628,14 +686,21 @@ export default function MetricView() {
       </Paper>
 
       {/* Create Metric Type */}
-      <Dialog open={createState.open} onClose={closeCreate} maxWidth="xs" fullWidth>
+      <Dialog
+        open={createState.open}
+        onClose={closeCreate}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Create metric type</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               label="Name"
               value={createState.name}
-              onChange={(e) => setCreateState((s) => ({ ...s, name: e.target.value }))}
+              onChange={(e) =>
+                setCreateState((s) => ({ ...s, name: e.target.value }))
+              }
               fullWidth
               autoFocus
             />
@@ -645,7 +710,10 @@ export default function MetricView() {
               select
               value={createState.kind}
               onChange={(e) =>
-                setCreateState((s) => ({ ...s, kind: e.target.value as CreateState["kind"] }))
+                setCreateState((s) => ({
+                  ...s,
+                  kind: e.target.value as CreateState["kind"],
+                }))
               }
               fullWidth
             >
@@ -657,7 +725,9 @@ export default function MetricView() {
             <TextField
               label="Unit (optional)"
               value={createState.unit}
-              onChange={(e) => setCreateState((s) => ({ ...s, unit: e.target.value }))}
+              onChange={(e) =>
+                setCreateState((s) => ({ ...s, unit: e.target.value }))
+              }
               fullWidth
               placeholder="e.g., cups, pages, minutes"
             />
@@ -667,7 +737,10 @@ export default function MetricView() {
               select
               value={createState.goalCadence}
               onChange={(e) =>
-                setCreateState((s) => ({ ...s, goalCadence: Number(e.target.value) as GoalCadence }))
+                setCreateState((s) => ({
+                  ...s,
+                  goalCadence: Number(e.target.value) as GoalCadence,
+                }))
               }
               fullWidth
             >
@@ -680,11 +753,13 @@ export default function MetricView() {
                 createState.kind === "Boolean" && createState.goalCadence === 1
                   ? "Goal (days per week)"
                   : createState.goalCadence === 0
-                    ? "Goal (per day)"
-                    : "Goal (per week)"
+                  ? "Goal (per day)"
+                  : "Goal (per week)"
               }
               value={createState.goalValue}
-              onChange={(e) => setCreateState((s) => ({ ...s, goalValue: e.target.value }))}
+              onChange={(e) =>
+                setCreateState((s) => ({ ...s, goalValue: e.target.value }))
+              }
               fullWidth
               inputMode="numeric"
               helperText={
@@ -699,7 +774,11 @@ export default function MetricView() {
           <Button onClick={closeCreate} sx={{ textTransform: "none" }}>
             Cancel
           </Button>
-          <Button onClick={() => void submitCreate()} variant="contained" sx={{ textTransform: "none" }}>
+          <Button
+            onClick={() => void submitCreate()}
+            variant="contained"
+            sx={{ textTransform: "none" }}
+          >
             Create
           </Button>
         </DialogActions>
@@ -713,7 +792,9 @@ export default function MetricView() {
             <TextField
               label="Name"
               value={editState.name}
-              onChange={(e) => setEditState((s) => ({ ...s, name: e.target.value }))}
+              onChange={(e) =>
+                setEditState((s) => ({ ...s, name: e.target.value }))
+              }
               fullWidth
               autoFocus
             />
@@ -723,7 +804,10 @@ export default function MetricView() {
               select
               value={editState.kind}
               onChange={(e) =>
-                setEditState((s) => ({ ...s, kind: e.target.value as EditState["kind"] }))
+                setEditState((s) => ({
+                  ...s,
+                  kind: e.target.value as EditState["kind"],
+                }))
               }
               fullWidth
             >
@@ -735,7 +819,9 @@ export default function MetricView() {
             <TextField
               label="Unit (optional)"
               value={editState.unit}
-              onChange={(e) => setEditState((s) => ({ ...s, unit: e.target.value }))}
+              onChange={(e) =>
+                setEditState((s) => ({ ...s, unit: e.target.value }))
+              }
               fullWidth
               placeholder="e.g., cups, pages, minutes"
             />
@@ -745,7 +831,10 @@ export default function MetricView() {
               select
               value={editState.goalCadence}
               onChange={(e) =>
-                setEditState((s) => ({ ...s, goalCadence: Number(e.target.value) as GoalCadence }))
+                setEditState((s) => ({
+                  ...s,
+                  goalCadence: Number(e.target.value) as GoalCadence,
+                }))
               }
               fullWidth
             >
@@ -758,11 +847,13 @@ export default function MetricView() {
                 editState.kind === "Boolean" && editState.goalCadence === 1
                   ? "Goal (days per week)"
                   : editState.goalCadence === 0
-                    ? "Goal (per day)"
-                    : "Goal (per week)"
+                  ? "Goal (per day)"
+                  : "Goal (per week)"
               }
               value={editState.goalValue}
-              onChange={(e) => setEditState((s) => ({ ...s, goalValue: e.target.value }))}
+              onChange={(e) =>
+                setEditState((s) => ({ ...s, goalValue: e.target.value }))
+              }
               fullWidth
               inputMode="numeric"
               helperText={
@@ -777,26 +868,44 @@ export default function MetricView() {
           <Button onClick={closeEdit} sx={{ textTransform: "none" }}>
             Cancel
           </Button>
-          <Button onClick={() => void submitEdit()} variant="contained" sx={{ textTransform: "none" }}>
+          <Button
+            onClick={() => void submitEdit()}
+            variant="contained"
+            sx={{ textTransform: "none" }}
+          >
             Save changes
           </Button>
         </DialogActions>
       </Dialog>
 
       {/* Set Value Dialog */}
-      <Dialog open={setValueState.open} onClose={closeSetValue} maxWidth="xs" fullWidth>
+      <Dialog
+        open={setValueState.open}
+        onClose={closeSetValue}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Set today’s value</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{ mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              {setValueState.metricType?.name} • {setValueState.metricType?.kind}
-              {setValueState.metricType?.unit ? ` • ${setValueState.metricType.unit}` : ""}
+              {setValueState.metricType?.name} •{" "}
+              {setValueState.metricType?.kind}
+              {setValueState.metricType?.unit
+                ? ` • ${setValueState.metricType.unit}`
+                : ""}
             </Typography>
 
             <TextField
-              label={setValueState.metricType?.kind === "Duration" ? "Minutes" : "Value"}
+              label={
+                setValueState.metricType?.kind === "Duration"
+                  ? "Minutes"
+                  : "Value"
+              }
               value={setValueState.value}
-              onChange={(e) => setSetValueState((s) => ({ ...s, value: e.target.value }))}
+              onChange={(e) =>
+                setSetValueState((s) => ({ ...s, value: e.target.value }))
+              }
               fullWidth
               inputMode="numeric"
             />
@@ -806,7 +915,11 @@ export default function MetricView() {
           <Button onClick={closeSetValue} sx={{ textTransform: "none" }}>
             Cancel
           </Button>
-          <Button onClick={() => void submitSetValue()} variant="contained" sx={{ textTransform: "none" }}>
+          <Button
+            onClick={() => void submitSetValue()}
+            variant="contained"
+            sx={{ textTransform: "none" }}
+          >
             Save
           </Button>
         </DialogActions>

@@ -8,8 +8,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  Divider,
-  IconButton,
   LinearProgress,
   Paper,
   Stack,
@@ -20,7 +18,7 @@ import Grid from "@mui/material/Grid";
 import AddIcon from "@mui/icons-material/Add";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TodayIcon from "@mui/icons-material/Today";
+import PlaylistAddIcon from "@mui/icons-material/PlaylistAdd";
 import { useNavigate } from "react-router-dom";
 
 import {
@@ -87,7 +85,11 @@ export default function Home() {
 
       const dateKey = metric.date.slice(0, 10);
       const filtered = next.filter(
-        (m) => !(m.metricTypeId === metric.metricTypeId && m.date.slice(0, 10) === dateKey)
+        (m) =>
+          !(
+            m.metricTypeId === metric.metricTypeId &&
+            m.date.slice(0, 10) === dateKey
+          )
       );
 
       return [metric, ...filtered];
@@ -148,7 +150,10 @@ export default function Home() {
   const todayChecked = useMemo(() => {
     const checked = new Map<string, boolean>();
     for (const mt of metricTypes) {
-      checked.set(mt.metricTypeId, metricByTypeAndDate.has(`${mt.metricTypeId}|${today}`));
+      checked.set(
+        mt.metricTypeId,
+        metricByTypeAndDate.has(`${mt.metricTypeId}|${today}`)
+      );
     }
     return checked;
   }, [metricTypes, metricByTypeAndDate, today]);
@@ -187,7 +192,10 @@ export default function Home() {
       if (!d) continue;
       if (d < weekFrom || d > weekTo) continue;
 
-      weeklyValueSum.set(m.metricTypeId, (weeklyValueSum.get(m.metricTypeId) ?? 0) + (m.value ?? 0));
+      weeklyValueSum.set(
+        m.metricTypeId,
+        (weeklyValueSum.get(m.metricTypeId) ?? 0) + (m.value ?? 0)
+      );
       weeklyDaysDone.get(m.metricTypeId)?.add(d);
     }
 
@@ -205,7 +213,9 @@ export default function Home() {
 
       if (cadence === 0) {
         // Daily cadence uses today only
-        const todayMetric = metricByTypeAndDate.get(`${mt.metricTypeId}|${today}`);
+        const todayMetric = metricByTypeAndDate.get(
+          `${mt.metricTypeId}|${today}`
+        );
         if (mt.kind === "Boolean") {
           current = todayMetric ? 1 : 0;
           progress = goal > 0 ? Math.min(1, current / goal) : 0;
@@ -313,28 +323,34 @@ export default function Home() {
   };
 
   const ProgressGrid = ({ mt, days }: { mt: MetricType; days: number[] }) => (
-    <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, height: "100%" }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+    <Paper
+      variant="outlined"
+      sx={{ p: 2, borderRadius: 3, height: "100%", overflow: "hidden" }}
+    >
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 900 }}>
           {mt.name}
         </Typography>
-        <Chip size="small" label="Monthly" variant="outlined" />
+        <Chip
+          size="small"
+          label="Monthly"
+          variant="outlined"
+          sx={{ height: 20, fontSize: 11 }}
+        />
       </Stack>
 
       <Box
         sx={{
           display: "grid",
-          gridTemplateColumns: "repeat(14, 10px)",
-          gap: "6px",
-          alignItems: "center",
+          gridTemplateColumns: "repeat(7, 1fr)",
+          gap: "4px",
         }}
       >
         {days.map((v, idx) => (
           <Box
             key={idx}
             sx={{
-              width: 10,
-              height: 10,
+              aspectRatio: "1",
               borderRadius: 1,
               bgcolor: v ? "primary.main" : "action.disabledBackground",
             }}
@@ -342,7 +358,11 @@ export default function Home() {
         ))}
       </Box>
 
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ display: "block", mt: 1 }}
+      >
         {days.filter(Boolean).length} active days
       </Typography>
     </Paper>
@@ -367,78 +387,58 @@ export default function Home() {
         </Paper>
       )}
 
-      <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} md={6}>
-          <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
+      <Grid container sx={{ mb: 3 }}>
+        <Grid size={12}>
+          <Paper variant="outlined" sx={{ p: 2, borderRadius: 3 }}>
             <Stack direction="row" spacing={2} alignItems="center">
               <Box
                 sx={{
-                  width: 44,
-                  height: 44,
+                  width: 36,
+                  height: 36,
                   borderRadius: 2,
                   display: "grid",
                   placeItems: "center",
                   bgcolor: "action.hover",
                 }}
               >
-                <TodayIcon />
+                <TrendingUpIcon fontSize="small" />
               </Box>
+
               <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="h5" sx={{ fontWeight: 900, letterSpacing: "-0.5px" }}>
-                  Dashboard
-                </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  Track, log, and build consistency with minimal friction.
-                </Typography>
-              </Box>
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                sx={{ textTransform: "none", borderRadius: 2, fontWeight: 800 }}
-                onClick={() => navigate("/metrics")}
-              >
-                New metric
-              </Button>
-            </Stack>
-          </Paper>
-        </Grid>
-
-        <Grid item xs={12} md={6}>
-          <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 2,
-                    display: "grid",
-                    placeItems: "center",
-                    bgcolor: "action.hover",
-                  }}
-                >
-                  <TrendingUpIcon />
-                </Box>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Today completion
-                  </Typography>
-                  <Typography variant="h4" sx={{ fontWeight: 900, lineHeight: 1.1 }}>
-                    {Math.round(todayPct * 100)}%
-                  </Typography>
-                </Box>
-              </Stack>
-
-              <Box sx={{ minWidth: 180 }}>
-                <Typography variant="caption" color="text.secondary">
-                  Completed {Math.round(todayPct * (metricTypes.length || 0))} of {metricTypes.length}
+                  Today completion
                 </Typography>
                 <LinearProgress
                   variant="determinate"
                   value={Math.round(todayPct * 100)}
-                  sx={{ mt: 1, height: 10, borderRadius: 99 }}
+                  sx={{ mt: 0.5, height: 6, borderRadius: 99 }}
                 />
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, display: "block" }}
+                >
+                  Completed {Math.round(todayPct * metricTypes.length)} of{" "}
+                  {metricTypes.length}
+                </Typography>
               </Box>
+
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 800, minWidth: 50, textAlign: "right" }}
+              >
+                {Math.round(todayPct * 100)}%
+              </Typography>
+
+              <Button
+                variant="contained"
+                size="small"
+                startIcon={<PlaylistAddIcon />}
+                sx={{ textTransform: "none", borderRadius: 2, fontWeight: 700 }}
+                onClick={() => navigate("/metrics")}
+              >
+                New metric
+              </Button>
             </Stack>
           </Paper>
         </Grid>
@@ -450,48 +450,59 @@ export default function Home() {
         </Paper>
       ) : (
         <Grid container spacing={3}>
-          <Grid item xs={12} md={7}>
+          <Grid size={{ xs: 12, md: 7 }}>
             <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+              <Stack
+                direction="row"
+                justifyContent="space-between"
+                alignItems="center"
+                sx={{ mb: 2 }}
+              >
                 <Typography variant="h6" sx={{ fontWeight: 900 }}>
                   Today
                 </Typography>
                 <Chip
                   size="small"
                   icon={<CalendarMonthIcon />}
-                  label={today}
+                  label={new Date().toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })}
                   variant="outlined"
-                  sx={{ fontWeight: 700 }}
+                  sx={{ px: 1 }}
                 />
               </Stack>
 
-              <Divider sx={{ my: 2 }} />
-
               {metricTypes.length === 0 ? (
-                <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
-                  <Typography sx={{ fontWeight: 800 }}>No metrics yet</Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-                    Create a metric type first (e.g., Sleep, Study, Mood, Gym).
+                <Box sx={{ py: 4, textAlign: "center" }}>
+                  <Typography color="text.secondary" sx={{ mb: 1 }}>
+                    No metrics yet
                   </Typography>
                   <Button
-                    variant="contained"
+                    variant="outlined"
+                    size="small"
                     startIcon={<AddIcon />}
                     sx={{ textTransform: "none", borderRadius: 2 }}
                     onClick={() => navigate("/metrics")}
                   >
-                    Go to Metrics
+                    Create your first metric
                   </Button>
-                </Paper>
+                </Box>
               ) : (
-                <Stack spacing={1} sx={{ maxHeight: 420, overflow: "auto", pr: 1 }}>
-                  {metricTypes.slice(0, 10).map((mt) => {
+                <Stack spacing={1} sx={{ maxHeight: 420, overflow: "auto" }}>
+                  {metricTypes.map((mt) => {
                     const isBoolean = mt.kind === "Boolean";
                     const checked = todayChecked.get(mt.metricTypeId) ?? false;
                     const key = `${mt.metricTypeId}|${today}`;
                     const busy = mutatingKey === key;
 
                     return (
-                      <Paper key={mt.metricTypeId} variant="outlined" sx={{ p: 1.25, borderRadius: 2 }}>
+                      <Paper
+                        key={mt.metricTypeId}
+                        variant="outlined"
+                        sx={{ p: 1.25, borderRadius: 2 }}
+                      >
                         <Stack direction="row" alignItems="center" spacing={1}>
                           <Checkbox
                             checked={checked}
@@ -500,19 +511,21 @@ export default function Home() {
                               if (isBoolean) void toggleBooleanToday(mt);
                             }}
                           />
-
                           <Box sx={{ flexGrow: 1 }}>
-                            <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 800 }}
+                            >
                               {mt.name}
                             </Typography>
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
                               {mt.kind}
                               {mt.unit ? ` • ${mt.unit}` : ""}
-                              {mt.goalValue > 0 ? ` • goal: ${mt.goalValue} (${cadenceLabel(mt.goalCadence)})` : ""}
-                              {!isBoolean ? " • log value" : ""}
                             </Typography>
                           </Box>
-
                           {!isBoolean && (
                             <Button
                               size="small"
@@ -530,31 +543,17 @@ export default function Home() {
                   })}
                 </Stack>
               )}
-
-              <Stack direction="row" justifyContent="flex-end" sx={{ mt: 2 }}>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  sx={{ textTransform: "none", borderRadius: 2 }}
-                  startIcon={<AddIcon />}
-                  onClick={() => navigate("/metrics")}
-                >
-                  Add metric
-                </Button>
-              </Stack>
             </Paper>
           </Grid>
 
-          <Grid item xs={12} md={5}>
-            <Paper variant="outlined" sx={{ p: 3, borderRadius: 3, height: "100%" }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                  Goals
-                </Typography>
-                <IconButton size="small" onClick={() => navigate("/metrics")} aria-label="manage metrics">
-                  <AddIcon />
-                </IconButton>
-              </Stack>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Paper
+              variant="outlined"
+              sx={{ p: 3, borderRadius: 3, height: "100%" }}
+            >
+              <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
+                Goals
+              </Typography>
 
               {goalCards.length === 0 ? (
                 <Typography color="text.secondary">
@@ -564,12 +563,17 @@ export default function Home() {
                 <Stack spacing={2}>
                   {goalCards.map((g) => (
                     <Box key={g.id}>
-                      <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75 }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        sx={{ mb: 0.75 }}
+                      >
                         <Typography variant="body2" sx={{ fontWeight: 800 }}>
                           {g.label}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {Math.round(g.progress * 100)}% • {g.meta} • {g.cadenceLabel}
+                          {Math.round(g.progress * 100)}% • {g.meta} •{" "}
+                          {g.cadenceLabel}
                         </Typography>
                       </Stack>
                       <LinearProgress
@@ -582,36 +586,32 @@ export default function Home() {
                 </Stack>
               )}
 
-              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>
-                Tip: Boolean goals are most intuitive as “days per week” (e.g., 5).
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mt: 2 }}
+              >
+                Tip: Boolean goals are most intuitive as “days per week” (e.g.,
+                5).
               </Typography>
             </Paper>
           </Grid>
 
-          <Grid item xs={12}>
+          <Grid size={12}>
             <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>
-                  Monthly progress
-                </Typography>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  sx={{ textTransform: "none", borderRadius: 2 }}
-                  onClick={() => navigate("/metrics")}
-                >
-                  Manage metrics
-                </Button>
-              </Stack>
-
+              <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
+                Monthly progress
+              </Typography>
               <Grid container spacing={2}>
                 {monthlyGrids.length === 0 ? (
-                  <Grid item xs={12}>
-                    <Typography color="text.secondary">No metrics yet.</Typography>
+                  <Grid size={12}>
+                    <Typography color="text.secondary">
+                      No metrics yet.
+                    </Typography>
                   </Grid>
                 ) : (
                   monthlyGrids.map(({ metricType: mt, days }) => (
-                    <Grid key={mt.metricTypeId} item xs={12} sm={6} md={3}>
+                    <Grid key={mt.metricTypeId} size={{ xs: 12, sm: 6, md: 3 }}>
                       <ProgressGrid mt={mt} days={days} />
                     </Grid>
                   ))
@@ -622,26 +622,41 @@ export default function Home() {
         </Grid>
       )}
 
-      <Dialog open={logDialog.open} onClose={closeLogDialog} maxWidth="xs" fullWidth>
+      <Dialog
+        open={logDialog.open}
+        onClose={closeLogDialog}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Log metric</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{ mt: 1 }}>
             <Typography variant="body2" color="text.secondary">
               {logDialog.metricType?.name} • {logDialog.metricType?.kind}
-              {logDialog.metricType?.unit ? ` • ${logDialog.metricType.unit}` : ""}
+              {logDialog.metricType?.unit
+                ? ` • ${logDialog.metricType.unit}`
+                : ""}
             </Typography>
 
             <TextField
               label="Date (YYYY-MM-DD)"
               value={logDialog.date}
-              onChange={(e) => setLogDialog((s) => ({ ...s, date: e.target.value }))}
+              onChange={(e) =>
+                setLogDialog((s) => ({ ...s, date: e.target.value }))
+              }
               fullWidth
             />
 
             <TextField
-              label={logDialog.metricType?.kind === "Duration" ? "Duration (minutes)" : "Value"}
+              label={
+                logDialog.metricType?.kind === "Duration"
+                  ? "Duration (minutes)"
+                  : "Value"
+              }
               value={logDialog.value}
-              onChange={(e) => setLogDialog((s) => ({ ...s, value: e.target.value }))}
+              onChange={(e) =>
+                setLogDialog((s) => ({ ...s, value: e.target.value }))
+              }
               fullWidth
               inputMode="decimal"
             />
@@ -651,7 +666,11 @@ export default function Home() {
           <Button onClick={closeLogDialog} sx={{ textTransform: "none" }}>
             Cancel
           </Button>
-          <Button onClick={submitLog} variant="contained" sx={{ textTransform: "none" }}>
+          <Button
+            onClick={submitLog}
+            variant="contained"
+            sx={{ textTransform: "none" }}
+          >
             Save
           </Button>
         </DialogActions>

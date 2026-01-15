@@ -14,6 +14,8 @@ import {
   CircularProgress,
   useTheme as useMuiTheme,
   useMediaQuery,
+  ToggleButtonGroup,
+  ToggleButton,
   Tab,
   Tabs,
 } from "@mui/material";
@@ -42,9 +44,11 @@ import {
   getInsights,
   getMetricTypes,
   compareMetrics,
+  getMetricAnalytics,
   type InsightItem,
   type MetricType,
   type CompareResult,
+  type MetricAnalyticsResponse,
 } from "../services/metricService";
 
 // Custom styled tooltip for charts
@@ -56,7 +60,7 @@ interface TooltipPayloadEntry {
 
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: TooltipPayloadEntry[];
+  payload?: readonly TooltipPayloadEntry[];
   label?: string | number;
   isDark?: boolean;
   valueFormatter?: (value: number, name: string) => string;
@@ -125,7 +129,7 @@ export default function Insights() {
   };
 
   // Tab state
-  const [tab, setTab] = useState<"auto" | "compare">("auto");
+  const [tab, setTab] = useState<"auto" | "individual" | "compare">("auto");
 
   // Auto insights state
   const [insights, setInsights] = useState<InsightItem[]>([]);
@@ -143,6 +147,12 @@ export default function Insights() {
     null
   );
   const [comparing, setComparing] = useState(false);
+
+  // Individual analytics state
+  const [selectedMetricId, setSelectedMetricId] = useState<string>("");
+  const [analyticsData, setAnalyticsData] = useState<MetricAnalyticsResponse | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [analyticsView, setAnalyticsView] = useState<"weekly" | "monthly">("weekly");
 
   useEffect(() => {
     const load = async () => {
@@ -193,6 +203,28 @@ export default function Insights() {
 
     void doCompare();
   }, [xMetric, yMetric]);
+
+  // Auto-fetch analytics when metric selected
+  useEffect(() => {
+    if (!selectedMetricId) {
+      setAnalyticsData(null);
+      return;
+    }
+
+    const fetchAnalytics = async () => {
+      setLoadingAnalytics(true);
+      const res = await getMetricAnalytics(selectedMetricId);
+      if (res.success) {
+        setAnalyticsData(res.data);
+      } else {
+        setErr(res.error);
+        setAnalyticsData(null);
+      }
+      setLoadingAnalytics(false);
+    };
+
+    void fetchAnalytics();
+  }, [selectedMetricId]);
 
   const getInsightIcon = (insight: InsightItem) => {
     switch (insight.insightType) {
@@ -772,6 +804,13 @@ export default function Insights() {
             sx={{ textTransform: "none", fontWeight: 700 }}
           />
           <Tab
+            label={isMobile ? "Metric" : "Individual"}
+            value="individual"
+            icon={<ShowChartIcon sx={{ fontSize: 20 }} />}
+            iconPosition="start"
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          />
+          <Tab
             label={isMobile ? "Compare" : "Compare"}
             value="compare"
             icon={<CompareArrowsIcon sx={{ fontSize: 20 }} />}
@@ -992,6 +1031,258 @@ export default function Insights() {
             </Stack>
           )}
         </>
+      ) : tab === "individual" ? (
+        // Individual Analytics Tab
+        <Paper
+          variant="outlined"
+          sx={{
+            p: { xs: 2, sm: 3 },
+            borderRadius: 3,
+            bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+          }}
+        >
+          {/* Metric selector and view toggle */}
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ mb: 3 }}
+            alignItems={{ xs: "stretch", sm: "center" }}
+            justifyContent="space-between"
+          >
+            <TextField
+              select
+              label="Select Metric"
+              value={selectedMetricId}
+              onChange={(e) => setSelectedMetricId(e.target.value)}
+              size={isMobile ? "small" : "medium"}
+              sx={{ minWidth: { sm: 280 } }}
+            >
+              <MenuItem value="" disabled>
+                Choose a metric to analyze
+              </MenuItem>
+              {metricTypes.map((mt) => (
+                <MenuItem key={mt.metricTypeId} value={mt.metricTypeId}>
+                  {mt.name} ({mt.kind})
+                </MenuItem>
+              ))}
+            </TextField>
+
+            {analyticsData && (
+              <ToggleButtonGroup
+                value={analyticsView}
+                exclusive
+                onChange={(_, v) => v && setAnalyticsView(v)}
+                size="small"
+              >
+                <ToggleButton value="weekly">Weekly</ToggleButton>
+                <ToggleButton value="monthly">Monthly</ToggleButton>
+              </ToggleButtonGroup>
+            )}
+          </Stack>
+
+          {loadingAnalytics ? (
+            <Box sx={{ textAlign: "center", py: 8 }}>
+              <CircularProgress size={32} />
+            </Box>
+          ) : !analyticsData ? (
+            <Box sx={{ textAlign: "center", py: 8, color: "text.secondary" }}>
+              <ShowChartIcon sx={{ fontSize: 48, opacity: 0.3, mb: 2 }} />
+              <Typography>Select a metric to view detailed analytics</Typography>
+            </Box>
+          ) : (
+            // Analytics content will go here
+            <Box>
+              {/* Stats cards */}
+              <Stack
+                direction={{ xs: "column", sm: "row" }}
+                spacing={2}
+                sx={{ mb: 3 }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    flex: 1,
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                    <WhatshotIcon sx={{ fontSize: 20, color: "warning.main" }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Current Streak
+                    </Typography>
+                  </Stack>
+                  <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                    {analyticsData.currentStreak}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    days
+                  </Typography>
+                </Paper>
+
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    flex: 1,
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                    <TrendingUpIcon sx={{ fontSize: 20, color: "success.main" }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Max Streak
+                    </Typography>
+                  </Stack>
+                  <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                    {analyticsData.maxStreak}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    days
+                  </Typography>
+                </Paper>
+
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    flex: 1,
+                  }}
+                >
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                    <ShowChartIcon sx={{ fontSize: 20, color: "primary.main" }} />
+                    <Typography variant="caption" color="text.secondary">
+                      Average
+                    </Typography>
+                  </Stack>
+                  <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                    {analyticsData.average.toFixed(1)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {analyticsData.unit || "value"}
+                  </Typography>
+                </Paper>
+              </Stack>
+
+              {/* Bar chart */}
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                  mb: 3,
+                }}
+              >
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>
+                  {analyticsView === "weekly" ? "Last 7 Days" : "Last 30 Days"}
+                </Typography>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart
+                    data={analyticsView === "weekly" ? analyticsData.weeklyData : analyticsData.monthlyData}
+                    margin={{ top: 20, right: 20, left: 0, bottom: 20 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fill: chartColors.text, fontSize: 12 }}
+                      stroke={chartColors.grid}
+                    />
+                    <YAxis
+                      tick={{ fill: chartColors.text, fontSize: 12 }}
+                      stroke={chartColors.grid}
+                    />
+                    <Tooltip
+                      content={(props) => (
+                        <ChartTooltip
+                          {...props}
+                          isDark={isDark}
+                          valueFormatter={(value) => `${value} ${analyticsData.unit || ""}`}
+                        />
+                      )}
+                    />
+                    {/* Average reference line */}
+                    <ReferenceLine
+                      y={analyticsData.average}
+                      stroke={chartColors.primary}
+                      strokeDasharray="5 5"
+                      strokeWidth={2}
+                      label={{
+                        value: `Avg: ${analyticsData.average.toFixed(1)}`,
+                        fill: chartColors.primary,
+                        fontSize: 12,
+                        position: "insideTopRight",
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                      {(analyticsView === "weekly" ? analyticsData.weeklyData : analyticsData.monthlyData).map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.isGoalMet ? theme.palette.success.main : chartColors.primary}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Paper>
+
+              {/* Most consistent days */}
+              {analyticsData.consistentDays.length > 0 && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>
+                    Most Consistent Days
+                  </Typography>
+                  <Stack spacing={1}>
+                    {analyticsData.consistentDays.slice(0, 3).map((day) => (
+                      <Box key={day.dayName}>
+                        <Stack
+                          direction="row"
+                          justifyContent="space-between"
+                          sx={{ mb: 0.5 }}
+                        >
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {day.dayName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {day.count} entries ({day.percentage.toFixed(0)}%)
+                          </Typography>
+                        </Stack>
+                        <Box
+                          sx={{
+                            height: 6,
+                            borderRadius: 3,
+                            bgcolor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              height: "100%",
+                              width: `${day.percentage}%`,
+                              bgcolor: "primary.main",
+                              borderRadius: 3,
+                            }}
+                          />
+                        </Box>
+                      </Box>
+                    ))}
+                  </Stack>
+                </Paper>
+              )}
+            </Box>
+          )}
+        </Paper>
       ) : (
         // Custom Compare Tab
         <Paper

@@ -73,6 +73,14 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
+// Security headers
+app.Use(async (context, next) =>
+{
+    context.Response.Headers.Append("X-Frame-Options", "DENY");
+    context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    await next();
+});
+
 // Handle forwarded headers from Render's load balancer
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {

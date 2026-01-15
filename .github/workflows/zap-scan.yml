@@ -17,17 +17,14 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Baseline scan against production (passive scan - safe for prod)
+      # Baseline scan against production (passive)
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
           target: "https://insights-app-kj9l.onrender.com"
           rules_file_name: ".zap/rules.tsv"
-          # Don't fail the build on warnings, only on errors
           cmd_options: "-a -j -l WARN"
-          # Generate reports
-          allow_issue_writing: true
-          artifact_name: "zap-baseline-report"
+          allow_issue_writing: false
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
@@ -55,8 +52,7 @@ jobs:
           target: "https://insights-app-kj9l.onrender.com/openapi/v1.json"
           rules_file_name: ".zap/rules.tsv"
           cmd_options: "-a -j -l WARN"
-          allow_issue_writing: true
-          artifact_name: "zap-api-report"
+          allow_issue_writing: false
 
       - name: Upload API Scan Report
         uses: actions/upload-artifact@v4

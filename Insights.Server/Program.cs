@@ -11,8 +11,6 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
-
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -78,6 +76,7 @@ app.Use(async (context, next) =>
 {
     context.Response.Headers.Append("X-Frame-Options", "DENY");
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
+    context.Response.Headers.Append("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     await next();
 });
 

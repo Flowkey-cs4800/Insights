@@ -3,6 +3,7 @@ import {
   AppBar as MuiAppBar,
   Box,
   Button,
+  Container,
   Divider,
   Drawer,
   IconButton,
@@ -30,7 +31,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useTheme } from "../hooks/useTheme";
 import { logout } from "../services/authService";
 
-const drawerWidth = 260;
+const drawerWidth = 280;
 
 type NavItem = { label: string; to: string; icon: React.ReactNode };
 
@@ -40,7 +41,7 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [anchorElUser, setAnchorElUser] = useState<null | HTMLElement>(null);
 
   const navItems: NavItem[] = useMemo(
@@ -56,7 +57,7 @@ export default function AppLayout() {
 
   const handleNav = (to: string) => {
     navigate(to);
-    setMobileOpen(false);
+    setDrawerOpen(false);
   };
 
   const handleOpenUserMenu = (e: React.MouseEvent<HTMLElement>) =>
@@ -67,12 +68,6 @@ export default function AppLayout() {
     handleCloseUserMenu();
     await logout();
     navigate("/", { replace: true });
-  };
-
-  const getPageTitle = () => {
-    if (isActive("/metrics")) return "Metrics";
-    if (isActive("/insights")) return "Insights";
-    return "Dashboard";
   };
 
   const drawer = (
@@ -87,13 +82,34 @@ export default function AppLayout() {
           }}
           onClick={() => handleNav("/dashboard")}
         >
-          <img
-            src="/logo.png"
-            alt="Insights"
-            style={{ height: 28, width: "auto" }}
-          />
-          <Typography sx={{ fontWeight: 900, letterSpacing: "-0.5px" }}>
-            INSIGHTS
+          <Box
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              bgcolor: (theme) =>
+                theme.palette.mode === "dark"
+                  ? "rgba(250, 204, 21, 0.2)"
+                  : "rgba(250, 204, 21, 0.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <img
+              src="/logo.png"
+              alt="Insights"
+              style={{ height: 22, width: "auto" }}
+            />
+          </Box>
+          <Typography
+            sx={{
+              fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+              fontWeight: 600,
+              letterSpacing: "-0.5px",
+            }}
+          >
+            insights
           </Typography>
         </Box>
 
@@ -104,7 +120,7 @@ export default function AppLayout() {
 
       <Divider />
 
-      <List sx={{ px: 1, py: 1 }}>
+      <List sx={{ px: 1, py: 1, flexGrow: 1 }}>
         {navItems.map((item) => (
           <ListItemButton
             key={item.to}
@@ -115,13 +131,11 @@ export default function AppLayout() {
             <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
             <ListItemText
               primary={item.label}
-              primaryTypographyProps={{ fontWeight: 800 }}
+              primaryTypographyProps={{ fontWeight: 500 }}
             />
           </ListItemButton>
         ))}
       </List>
-
-      <Box sx={{ flexGrow: 1 }} />
 
       <Divider />
 
@@ -129,7 +143,7 @@ export default function AppLayout() {
         <Typography variant="caption" color="text.secondary">
           Signed in as
         </Typography>
-        <Typography sx={{ fontWeight: 800, lineHeight: 1.2 }}>
+        <Typography sx={{ fontWeight: 600, lineHeight: 1.2 }}>
           {user?.name ?? "User"}
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
@@ -142,12 +156,11 @@ export default function AppLayout() {
   return (
     <Box
       sx={{
-        display: "flex",
         minHeight: "100vh",
         bgcolor: "background.default",
       }}
     >
-      {/* Top App Bar */}
+      {/* Single Top AppBar */}
       <MuiAppBar
         position="fixed"
         color="transparent"
@@ -157,40 +170,76 @@ export default function AppLayout() {
           borderColor: "divider",
           bgcolor: "background.default",
           backdropFilter: "blur(10px)",
-          left: { xs: 0, md: `${drawerWidth}px` },
-          width: { xs: "100%", md: `calc(100% - ${drawerWidth}px)` },
-          zIndex: (theme) => theme.zIndex.drawer + 1,
         }}
       >
-        <Toolbar sx={{ px: { xs: 2, md: 3 } }}>
+        <Toolbar sx={{ px: { xs: 1, sm: 2 } }}>
+          {/* Hamburger */}
           <IconButton
             aria-label="open navigation"
-            onClick={() => setMobileOpen(true)}
-            sx={{ display: { xs: "inline-flex", md: "none" }, mr: 1 }}
+            onClick={() => setDrawerOpen(true)}
+            sx={{ mr: 1 }}
           >
             <MenuIcon />
           </IconButton>
 
-          <Typography
-            sx={{ fontWeight: 900, letterSpacing: "-0.5px", flexGrow: 1 }}
+          {/* Logo */}
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              cursor: "pointer",
+              flexGrow: 1,
+            }}
+            onClick={() => navigate("/dashboard")}
           >
-            {getPageTitle()}
-          </Typography>
+            <Box
+              sx={{
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                bgcolor: (theme) =>
+                  theme.palette.mode === "dark"
+                    ? "rgba(250, 204, 21, 0.2)"
+                    : "rgba(250, 204, 21, 0.15)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <img
+                src="/logo.png"
+                alt="Insights"
+                style={{ height: 20, width: "auto" }}
+              />
+            </Box>
+            <Typography
+              sx={{
+                fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+                fontWeight: 600,
+                letterSpacing: "-0.5px",
+              }}
+            >
+              insights
+            </Typography>
+          </Box>
 
+          {/* Theme toggle */}
           <Tooltip title={mode === "light" ? "Dark mode" : "Light mode"}>
-            <IconButton onClick={toggleMode} sx={{ mr: 1 }}>
+            <IconButton onClick={toggleMode} sx={{ mr: 0.5 }}>
               {mode === "light" ? <DarkModeIcon /> : <LightModeIcon />}
             </IconButton>
           </Tooltip>
 
+          {/* User menu */}
           <Button
             onClick={handleOpenUserMenu}
             startIcon={<AccountCircleIcon />}
             sx={{
               textTransform: "none",
-              fontWeight: 800,
+              fontWeight: 500,
               color: "text.primary",
-              minWidth: { xs: "auto", sm: "auto" },
+              minWidth: "auto",
               px: { xs: 1, sm: 2 },
             }}
           >
@@ -212,31 +261,6 @@ export default function AppLayout() {
               </Typography>
             </MenuItem>
             <Divider />
-            <MenuItem
-              onClick={() => {
-                handleCloseUserMenu();
-                navigate("/dashboard");
-              }}
-            >
-              Dashboard
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                handleCloseUserMenu();
-                navigate("/metrics");
-              }}
-            >
-              Metrics
-            </MenuItem>
-            <MenuItem
-              onClick={() => {
-                handleCloseUserMenu();
-                navigate("/insights");
-              }}
-            >
-              Insights
-            </MenuItem>
-            <Divider />
             <MenuItem onClick={handleLogout}>
               <ListItemIcon sx={{ minWidth: 36 }}>
                 <LogoutIcon fontSize="small" />
@@ -247,53 +271,28 @@ export default function AppLayout() {
         </Toolbar>
       </MuiAppBar>
 
-      {/* Sidebar (desktop permanent) */}
+      {/* Navigation Drawer (temporary, all screen sizes) */}
       <Drawer
-        variant="permanent"
-        open
+        variant="temporary"
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        ModalProps={{ keepMounted: true }}
         sx={{
-          display: { xs: "none", md: "block" },
-          width: drawerWidth,
-          flexShrink: 0,
           [`& .MuiDrawer-paper`]: {
             width: drawerWidth,
             boxSizing: "border-box",
-            borderRight: "1px solid",
-            borderColor: "divider",
           },
         }}
       >
         {drawer}
       </Drawer>
 
-      {/* Sidebar (mobile temporary) */}
-      <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          display: { xs: "block", md: "none" },
-          [`& .MuiDrawer-paper`]: { width: drawerWidth },
-        }}
-      >
-        {drawer}
-      </Drawer>
-
       {/* Main content */}
-      <Box
-        component="main"
-        sx={{
-          flexGrow: 1,
-          px: { xs: 2, md: 3 },
-          pb: 4,
-          minWidth: 0,
-        }}
-      >
+      <Box component="main">
         <Toolbar />
-        <Box sx={{ mt: 3 }}>
+        <Container maxWidth="lg" sx={{ py: 3 }}>
           <Outlet />
-        </Box>
+        </Container>
       </Box>
     </Box>
   );

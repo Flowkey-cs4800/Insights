@@ -14,6 +14,7 @@ import {
   IconButton,
   MenuItem,
   Paper,
+  Skeleton,
   Snackbar,
   Stack,
   Tab,
@@ -48,7 +49,7 @@ import {
   type GoalCadence,
 } from "../services/metricService";
 
-const cadenceLabel = (c: GoalCadence) => (c === 0 ? "Daily" : "Weekly");
+const cadenceLabel = (c: GoalCadence) => (c === "Daily" ? "Daily" : "Weekly");
 
 // Helper functions for day bit flags
 // Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
@@ -149,7 +150,7 @@ export default function MetricView() {
     kind: "Boolean",
     unit: "",
     hasGoal: false,
-    goalCadence: 1,
+    goalCadence: "Weekly",
     goalValue: "5",
     goalDays: 127,
   });
@@ -161,7 +162,7 @@ export default function MetricView() {
     kind: "Boolean",
     unit: "",
     hasGoal: false,
-    goalCadence: 1,
+    goalCadence: "Weekly",
     goalValue: "5",
     goalDays: 127,
   });
@@ -329,7 +330,7 @@ export default function MetricView() {
       kind: "Boolean",
       unit: "",
       hasGoal: false,
-      goalCadence: 1,
+      goalCadence: "Weekly",
       goalValue: "5",
       goalDays: 127, // All days selected by default
     });
@@ -341,7 +342,7 @@ export default function MetricView() {
       kind: "Boolean",
       unit: "",
       hasGoal: false,
-      goalCadence: 1,
+      goalCadence: "Weekly",
       goalValue: "5",
       goalDays: 127,
     });
@@ -362,15 +363,18 @@ export default function MetricView() {
       }
 
       gv = Math.floor(goalValueNum);
-      if (createState.kind === "Boolean" && createState.goalCadence === 0)
+      if (createState.kind === "Boolean" && createState.goalCadence === "Daily")
         gv = Math.min(1, gv);
-      if (createState.kind === "Boolean" && createState.goalCadence === 1)
+      if (
+        createState.kind === "Boolean" &&
+        createState.goalCadence === "Weekly"
+      )
         gv = Math.min(7, gv);
     }
 
     // Validate goal days for daily cadence
-    let goalDays = createState.goalDays;
-    if (createState.hasGoal && createState.goalCadence === 0) {
+    const goalDays = createState.goalDays;
+    if (createState.hasGoal && createState.goalCadence === "Daily") {
       if (goalDays <= 0) {
         return setErr("Please select at least one day for your daily goal.");
       }
@@ -402,7 +406,7 @@ export default function MetricView() {
       kind: mt.kind,
       unit: mt.unit ?? "",
       hasGoal: (mt.goalValue ?? 0) > 0,
-      goalCadence: mt.goalCadence ?? 1,
+      goalCadence: mt.goalCadence ?? "Weekly",
       goalValue: String(mt.goalValue ?? 0) || "5",
       goalDays: mt.goalDays ?? 127,
     });
@@ -416,7 +420,7 @@ export default function MetricView() {
       kind: "Boolean",
       unit: "",
       hasGoal: false,
-      goalCadence: 1,
+      goalCadence: "Weekly",
       goalValue: "5",
       goalDays: 127,
     });
@@ -445,15 +449,15 @@ export default function MetricView() {
       }
 
       gv = Math.floor(goalValueNum);
-      if (editState.kind === "Boolean" && editState.goalCadence === 0)
+      if (editState.kind === "Boolean" && editState.goalCadence === "Daily")
         gv = Math.min(1, gv);
-      if (editState.kind === "Boolean" && editState.goalCadence === 1)
+      if (editState.kind === "Boolean" && editState.goalCadence === "Weekly")
         gv = Math.min(7, gv);
     }
 
     // Validate goal days for daily cadence
-    let goalDays = editState.goalDays;
-    if (editState.hasGoal && editState.goalCadence === 0) {
+    const goalDays = editState.goalDays;
+    if (editState.hasGoal && editState.goalCadence === "Daily") {
       if (goalDays <= 0) {
         setBusy(mt.metricTypeId, false);
         return setErr("Please select at least one day for your daily goal.");
@@ -530,7 +534,7 @@ export default function MetricView() {
             <ArrowBackIcon />
           </IconButton>
           <Box>
-            <Typography variant="h5" sx={{ fontWeight: 900 }}>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
               Metrics
             </Typography>
             <Typography variant="body2" color="text.secondary">
@@ -544,7 +548,7 @@ export default function MetricView() {
             variant="contained"
             size="small"
             startIcon={<AddIcon />}
-            sx={{ textTransform: "none", borderRadius: 2, fontWeight: 700 }}
+            sx={{ textTransform: "none", borderRadius: 2, fontWeight: 500 }}
             onClick={openCreate}
           >
             New metric
@@ -566,12 +570,12 @@ export default function MetricView() {
           <Tab
             label="Types"
             value="types"
-            sx={{ textTransform: "none", fontWeight: 700 }}
+            sx={{ textTransform: "none", fontWeight: 500 }}
           />
           <Tab
             label="History"
             value="history"
-            sx={{ textTransform: "none", fontWeight: 700 }}
+            sx={{ textTransform: "none", fontWeight: 500 }}
           />
         </Tabs>
 
@@ -579,7 +583,11 @@ export default function MetricView() {
           {tab === "types" ? (
             <>
               {loading ? (
-                <Typography color="text.secondary">Loading…</Typography>
+                <Stack spacing={1}>
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} variant="rounded" height={64} />
+                  ))}
+                </Stack>
               ) : metricTypes.length === 0 ? (
                 <Typography color="text.secondary">
                   No metric types yet. Create one.
@@ -607,7 +615,7 @@ export default function MetricView() {
                               alignItems="center"
                               flexWrap="wrap"
                             >
-                              <Typography sx={{ fontWeight: 900 }}>
+                              <Typography sx={{ fontWeight: 600 }}>
                                 {mt.name}
                               </Typography>
                               <Chip
@@ -722,7 +730,22 @@ export default function MetricView() {
               <Divider sx={{ mb: 2 }} />
 
               {historyLoading ? (
-                <Typography color="text.secondary">Loading…</Typography>
+                <Stack spacing={2}>
+                  {[1, 2, 3].map((i) => (
+                    <Box key={i}>
+                      <Skeleton
+                        variant="text"
+                        width={150}
+                        height={24}
+                        sx={{ mb: 1 }}
+                      />
+                      <Stack spacing={0.75}>
+                        <Skeleton variant="rounded" height={52} />
+                        <Skeleton variant="rounded" height={52} />
+                      </Stack>
+                    </Box>
+                  ))}
+                </Stack>
               ) : groupedByDate.length === 0 ? (
                 <Paper
                   variant="outlined"
@@ -772,7 +795,7 @@ export default function MetricView() {
                           >
                             <Typography
                               variant="subtitle2"
-                              sx={{ fontWeight: 700 }}
+                              sx={{ fontWeight: 500 }}
                             >
                               {formattedDate}
                             </Typography>
@@ -814,7 +837,7 @@ export default function MetricView() {
                                     <Box>
                                       <Typography
                                         variant="body2"
-                                        sx={{ fontWeight: 700 }}
+                                        sx={{ fontWeight: 500 }}
                                       >
                                         {entry.metricTypeName}
                                       </Typography>
@@ -944,7 +967,7 @@ export default function MetricView() {
             >
               <MenuItem value="Boolean">Boolean (yes / no)</MenuItem>
               <MenuItem value="Number">Number (count / score)</MenuItem>
-              <MenuItem value="Duration">Duration (minutes)</MenuItem>
+              <MenuItem value="Duration">Duration (time)</MenuItem>
             </TextField>
 
             {createState.kind !== "Boolean" && (
@@ -980,21 +1003,21 @@ export default function MetricView() {
                   onChange={(e) =>
                     setCreateState((s) => ({
                       ...s,
-                      goalCadence: Number(e.target.value) as GoalCadence,
+                      goalCadence: e.target.value as GoalCadence,
                     }))
                   }
                   fullWidth
                 >
-                  <MenuItem value={0}>Daily</MenuItem>
-                  <MenuItem value={1}>Weekly</MenuItem>
+                  <MenuItem value="Daily">Daily</MenuItem>
+                  <MenuItem value="Weekly">Weekly</MenuItem>
                 </TextField>
 
                 <TextField
                   label={
                     createState.kind === "Boolean" &&
-                    createState.goalCadence === 1
+                    createState.goalCadence === "Weekly"
                       ? "Goal (days per week)"
-                      : createState.goalCadence === 0
+                      : createState.goalCadence === "Daily"
                       ? "Goal (per day)"
                       : "Goal (per week)"
                   }
@@ -1012,13 +1035,19 @@ export default function MetricView() {
                 />
 
                 {/* Day selection for daily goals */}
-                {createState.goalCadence === 0 && (
+                {createState.goalCadence === "Daily" && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mb: 1 }}
+                    >
                       Active on these days:
                     </Typography>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                      {(Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>).map((day) => (
+                      {(
+                        Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>
+                      ).map((day) => (
                         <FormControlLabel
                           key={day}
                           control={
@@ -1081,18 +1110,13 @@ export default function MetricView() {
               label="Kind"
               select
               value={editState.kind}
-              onChange={(e) =>
-                setEditState((s) => ({
-                  ...s,
-                  kind: e.target.value as EditState["kind"],
-                  unit: e.target.value === "Boolean" ? "" : s.unit,
-                }))
-              }
+              disabled
               fullWidth
+              helperText="To change kind, delete and recreate the metric"
             >
               <MenuItem value="Boolean">Boolean (yes / no)</MenuItem>
               <MenuItem value="Number">Number (count / score)</MenuItem>
-              <MenuItem value="Duration">Duration (minutes)</MenuItem>
+              <MenuItem value="Duration">Duration (time)</MenuItem>
             </TextField>
 
             {editState.kind !== "Boolean" && (
@@ -1128,20 +1152,21 @@ export default function MetricView() {
                   onChange={(e) =>
                     setEditState((s) => ({
                       ...s,
-                      goalCadence: Number(e.target.value) as GoalCadence,
+                      goalCadence: e.target.value as GoalCadence,
                     }))
                   }
                   fullWidth
                 >
-                  <MenuItem value={0}>Daily</MenuItem>
-                  <MenuItem value={1}>Weekly</MenuItem>
+                  <MenuItem value="Daily">Daily</MenuItem>
+                  <MenuItem value="Weekly">Weekly</MenuItem>
                 </TextField>
 
                 <TextField
                   label={
-                    editState.kind === "Boolean" && editState.goalCadence === 1
+                    editState.kind === "Boolean" &&
+                    editState.goalCadence === "Weekly"
                       ? "Goal (days per week)"
-                      : editState.goalCadence === 0
+                      : editState.goalCadence === "Daily"
                       ? "Goal (per day)"
                       : "Goal (per week)"
                   }
@@ -1153,19 +1178,25 @@ export default function MetricView() {
                   inputMode="numeric"
                   helperText={
                     editState.kind === "Boolean"
-                      ? "Boolean goals are clamped: Daily ≤ 1, Weekly ≤ 7."
+                      ? "Boolean goals are clamped: Daily <= 1, Weekly <= 7."
                       : "Numeric target for the selected cadence."
                   }
                 />
 
                 {/* Day selection for daily goals */}
-                {editState.goalCadence === 0 && (
+                {editState.goalCadence === "Daily" && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mb: 1 }}
+                    >
                       Active on these days:
                     </Typography>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                      {(Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>).map((day) => (
+                      {(
+                        Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>
+                      ).map((day) => (
                         <FormControlLabel
                           key={day}
                           control={

@@ -502,21 +502,49 @@ public static class MetricRoutes
 
                 var sortedDates = data.Keys.OrderByDescending(d => d).ToList();
                 
-                // Streak calculation
+                // Streak calculation - current streak
                 var streak = 0;
                 var checkDate = today;
+                DateOnly? streakStartDate = null;
                 
                 if (!data.ContainsKey(checkDate))
                     checkDate = today.AddDays(-1);
                 
+                var streakCheckStart = checkDate;
                 while (data.ContainsKey(checkDate))
                 {
                     streak++;
+                    streakStartDate = checkDate;
                     checkDate = checkDate.AddDays(-1);
                 }
 
+                // Calculate max streak from all history
+                var maxStreak = 0;
+                var tempStreak = 0;
+                var allDates = data.Keys.OrderBy(d => d).ToList();
+                DateOnly? prevDate = null;
+                foreach (var d in allDates)
+                {
+                    if (prevDate == null || d == prevDate.Value.AddDays(1))
+                    {
+                        tempStreak++;
+                        maxStreak = Math.Max(maxStreak, tempStreak);
+                    }
+                    else
+                    {
+                        tempStreak = 1;
+                    }
+                    prevDate = d;
+                }
+
+                var daysUntilRecord = maxStreak > streak ? maxStreak - streak + 1 : 0;
+
                 if (streak >= 3)
                 {
+                    var detailedExplanation = streak >= maxStreak
+                        ? $"This is your best streak ever for {mt.Name}! You started this streak on {streakStartDate?.ToString("MMM d")}. Keep it going!"
+                        : $"Your current streak started on {streakStartDate?.ToString("MMM d")}. Your record is {maxStreak} days. Just {daysUntilRecord} more to beat it!";
+
                     singleInsights.Add(new InsightItem(
                         mt.MetricTypeId,
                         null,
@@ -526,22 +554,44 @@ public static class MetricRoutes
                         null,
                         streak,
                         "positive",
-                        $"🔥 {streak} day streak on {mt.Name}!",
+                        $"You've logged {mt.Name} for {streak} days in a row",
+                        detailedExplanation,
                         streak,
                         "streak",
                         null,
+                        null,
+                        new StreakData(streak, maxStreak, streakStartDate?.ToString("yyyy-MM-dd"), daysUntilRecord),
                         null,
                         null
                     ));
                 }
 
-                // Consistency
+                // Consistency calculation
                 var last7Days = Enumerable.Range(0, 7).Select(i => today.AddDays(-i)).ToList();
                 var daysLogged = last7Days.Count(d => data.ContainsKey(d));
                 var consistency = Math.Round((double)daysLogged / 7 * 100);
+                
+                // Which days were logged
+                var dayNames = new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
+                var loggedDayNames = last7Days
+                    .Where(d => data.ContainsKey(d))
+                    .Select(d => dayNames[(int)d.DayOfWeek])
+                    .ToList();
+
+                // Previous week for comparison
+                var prev7Days = Enumerable.Range(7, 7).Select(i => today.AddDays(-i)).ToList();
+                var prevWeekCount = prev7Days.Count(d => data.ContainsKey(d));
 
                 if (daysLogged >= 5)
                 {
+                    var comparison = daysLogged > prevWeekCount
+                        ? $"That's up from {prevWeekCount} days last week. Nice improvement!"
+                        : daysLogged == prevWeekCount
+                        ? $"You're maintaining the same pace as last week ({prevWeekCount} days)."
+                        : $"Last week you logged {prevWeekCount} days.";
+
+                    var detailedExplanation = $"You logged {mt.Name} on {string.Join(", ", loggedDayNames)} this week. {comparison}";
+
                     singleInsights.Add(new InsightItem(
                         mt.MetricTypeId,
                         null,
@@ -551,48 +601,26 @@ public static class MetricRoutes
                         null,
                         consistency,
                         "positive",
-                        $"Great consistency! {mt.Name} logged {daysLogged}/7 days this week",
+                        $"Solid habit: you've tracked {mt.Name} on {daysLogged} of the last 7 days",
+                        detailedExplanation,
                         daysLogged,
                         "consistency",
                         null,
                         null,
-                        null
-                    ));
-                }
-
-                // Average for Number/Duration
-                if (mt.Kind != MetricKind.Boolean && data.Count >= 3)
-                {
-                    var avg = Math.Round(data.Values.Average(), 1);
-                    var unit = mt.Unit ?? "";
-                    singleInsights.Add(new InsightItem(
-                        mt.MetricTypeId,
                         null,
-                        mt.Name,
-                        null,
-                        mt.Unit,
-                        null,
-                        avg,
-                        "neutral",
-                        $"You average {avg} {unit} of {mt.Name.ToLower()} per day".Trim(),
-                        data.Count,
-                        "average",
-                        null,
-                        null,
+                        new ConsistencyData(daysLogged, 7, consistency, loggedDayNames, prevWeekCount),
                         null
                     ));
                 }
             }
 
-            // Prioritize cross-metric correlations, then streaks
+            // Combine and sort all insights by strength
+            // Correlations first (they're more interesting), then single-metric insights
             var combined = correlationInsights
                 .OrderByDescending(i => i.Strength)
-                .Take(3)
                 .Concat(singleInsights
                     .OrderByDescending(i => i.InsightType == "streak" ? 1 : 0)
-                    .ThenByDescending(i => i.Strength)
-                    .Take(3))
-                .Take(5)
+                    .ThenByDescending(i => i.Strength))
                 .ToList();
 
             return Results.Ok(new InsightsResponse(combined));
@@ -624,6 +652,21 @@ public static class MetricRoutes
         string? Unit
     );
 
+    public record StreakData(
+        int CurrentStreak,
+        int MaxStreak,
+        string? StreakStartDate,
+        int DaysUntilRecord
+    );
+
+    public record ConsistencyData(
+        int DaysLogged,
+        int TotalDays,
+        double Percentage,
+        List<string> LoggedDays,
+        int? PreviousWeekCount
+    );
+
     public record InsightItem(
         Guid MetricTypeIdX,
         Guid? MetricTypeIdY,
@@ -634,10 +677,13 @@ public static class MetricRoutes
         double Strength,        // Absolute difference/effect size for sorting
         string Direction,       // "positive", "negative", "neutral"
         string Summary,
+        string? DetailedExplanation,  // Longer, more detailed explanation
         int DataPoints,
-        string InsightType,     // "correlation", "streak", "consistency", "average"
+        string InsightType,     // "correlation", "streak", "consistency"
         string? ComparisonType, // "boolean_boolean", "boolean_numeric", "numeric_numeric"
         ComparisonData? ComparisonData,
+        StreakData? StreakData,
+        ConsistencyData? ConsistencyData,
         List<ComparePoint>? ScatterData
     );
     public record InsightsResponse(List<InsightItem> Insights);
@@ -682,9 +728,13 @@ public static class MetricRoutes
             return null;
 
         var direction = diff > 0 ? "positive" : "negative";
-        var summary = diff > 0
-            ? $"{typeX.Name} rate: {xRateWithY:F0}% on {typeY.Name.ToLower()} days vs {xRateWithoutY:F0}% otherwise (+{diff:F0}pts)"
-            : $"{typeX.Name} rate: {xRateWithY:F0}% on {typeY.Name.ToLower()} days vs {xRateWithoutY:F0}% otherwise ({diff:F0}pts)";
+        var moreOrLess = diff > 0 ? "more" : "less";
+        var summary = $"You're {Math.Abs(diff):F0}% {moreOrLess} likely to log {typeX.Name} on days you log {typeY.Name}";
+        
+        var detailedExplanation = $"Looking at {points.Count} days of data: on days when you logged {typeY.Name}, " +
+            $"you also logged {typeX.Name} {xRateWithY:F0}% of the time ({daysWithY.Count(p => p.X == 1)} out of {daysWithY.Count} days). " +
+            $"On days without {typeY.Name}, that drops to {xRateWithoutY:F0}% ({daysWithoutY.Count(p => p.X == 1)} out of {daysWithoutY.Count} days). " +
+            $"That's a {Math.Abs(diff):F0} percentage point difference.";
 
         return new InsightItem(
             typeX.MetricTypeId,
@@ -696,17 +746,20 @@ public static class MetricRoutes
             Math.Abs(diff),
             direction,
             summary,
+            detailedExplanation,
             points.Count,
             "correlation",
             "boolean_boolean",
             new ComparisonData(
-                new ComparisonGroup($"With {typeY.Name.ToLower()}", xRateWithY, daysWithY.Count),
-                new ComparisonGroup($"Without", xRateWithoutY, daysWithoutY.Count),
+                new ComparisonGroup($"Days with {typeY.Name}", xRateWithY, daysWithY.Count),
+                new ComparisonGroup($"Days without", xRateWithoutY, daysWithoutY.Count),
                 "percentage",
                 diff,
                 null,
                 null
             ),
+            null,
+            null,
             points
         );
     }
@@ -743,8 +796,13 @@ public static class MetricRoutes
 
         var direction = percentDiff > 0 ? "positive" : "negative";
         var unit = numType.Unit != null ? $" {numType.Unit}" : "";
-        var sign = percentDiff > 0 ? "+" : "";
-        var summary = $"{numType.Name} averages {avgWhenTrue:F1}{unit} on {boolType.Name.ToLower()} days vs {avgWhenFalse:F1}{unit} otherwise ({sign}{percentDiff:F0}%)";
+        var higherOrLower = percentDiff > 0 ? "higher" : "lower";
+        var summary = $"On days you log {boolType.Name}, your {numType.Name} tends to be {Math.Abs(percentDiff):F0}% {higherOrLower}";
+        
+        var detailedExplanation = $"Based on {points.Count} days of data: when you logged {boolType.Name}, " +
+            $"your {numType.Name} averaged {avgWhenTrue:F1}{unit} ({valuesWhenTrue.Count} days). " +
+            $"On days without {boolType.Name}, it averaged {avgWhenFalse:F1}{unit} ({valuesWhenFalse.Count} days). " +
+            $"That's a {Math.Abs(percentDiff):F0}% difference.";
 
         return new InsightItem(
             xIsBoolean ? boolType.MetricTypeId : numType.MetricTypeId,
@@ -756,17 +814,20 @@ public static class MetricRoutes
             Math.Abs(percentDiff),
             direction,
             summary,
+            detailedExplanation,
             points.Count,
             "correlation",
             "boolean_numeric",
             new ComparisonData(
-                new ComparisonGroup($"With {boolType.Name.ToLower()}", avgWhenTrue, valuesWhenTrue.Count),
-                new ComparisonGroup($"Without", avgWhenFalse, valuesWhenFalse.Count),
+                new ComparisonGroup($"Days with {boolType.Name}", avgWhenTrue, valuesWhenTrue.Count),
+                new ComparisonGroup($"Days without", avgWhenFalse, valuesWhenFalse.Count),
                 "average",
                 percentDiff,
                 null,
                 numType.Unit
             ),
+            null,
+            null,
             points
         );
     }
@@ -812,13 +873,18 @@ public static class MetricRoutes
         var direction = percentDiff > 0 ? "positive" : "negative";
         var unitX = typeX.Unit != null ? $" {typeX.Unit}" : "";
         var unitY = typeY.Unit != null ? $" {typeY.Unit}" : "";
-        var sign = percentDiff > 0 ? "+" : "";
         
         // Use actual min/max of groups for clearer labels
         var highMin = highGroup.Min(p => p.X);
         var lowMax = lowGroup.Max(p => p.X);
         
-        var summary = $"When {typeX.Name.ToLower()} ≥ {highMin}{unitX}, {typeY.Name.ToLower()} averages {avgHigh:F1}{unitY} vs {avgLow:F1}{unitY} ({sign}{percentDiff:F0}%)";
+        var higherOrLower = percentDiff > 0 ? "higher" : "lower";
+        var summary = $"Higher {typeX.Name} correlates with {higherOrLower} {typeY.Name} ({Math.Abs(percentDiff):F0}% difference)";
+        
+        var detailedExplanation = $"We split your {points.Count} days of data at the median ({highMin}{unitX}). " +
+            $"On days when {typeX.Name} was {highMin}{unitX} or higher, your {typeY.Name} averaged {avgHigh:F1}{unitY} ({highGroup.Count} days). " +
+            $"On days below that threshold, it averaged {avgLow:F1}{unitY} ({lowGroup.Count} days). " +
+            $"That's a {Math.Abs(percentDiff):F0}% difference between the two groups.";
 
         return new InsightItem(
             typeX.MetricTypeId,
@@ -830,17 +896,20 @@ public static class MetricRoutes
             Math.Abs(percentDiff),
             direction,
             summary,
+            detailedExplanation,
             points.Count,
             "correlation",
             "numeric_numeric",
             new ComparisonData(
-                new ComparisonGroup($"≥{highMin}{unitX}", avgHigh, highGroup.Count),
-                new ComparisonGroup($"<{highMin}{unitX}", avgLow, lowGroup.Count),
+                new ComparisonGroup($"High {typeX.Name} (>={highMin}{unitX})", avgHigh, highGroup.Count),
+                new ComparisonGroup($"Low {typeX.Name} (<{highMin}{unitX})", avgLow, lowGroup.Count),
                 "average",
                 percentDiff,
                 highMin,
                 typeY.Unit
             ),
+            null,
+            null,
             points
         );
     }

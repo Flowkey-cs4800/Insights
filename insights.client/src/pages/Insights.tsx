@@ -1,23 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Alert,
   Box,
   Chip,
+  Divider,
+  Fade,
   IconButton,
   MenuItem,
   Paper,
+  Skeleton,
   Snackbar,
   Stack,
   TextField,
   Typography,
-  CircularProgress,
   useTheme as useMuiTheme,
   useMediaQuery,
   ToggleButtonGroup,
   ToggleButton,
-  Tab,
-  Tabs,
 } from "@mui/material";
 
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -26,6 +26,8 @@ import WhatshotIcon from "@mui/icons-material/Whatshot";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import CompareArrowsIcon from "@mui/icons-material/CompareArrows";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import {
   ScatterChart,
   Scatter,
@@ -51,7 +53,11 @@ import {
   type MetricAnalyticsResponse,
 } from "../services/metricService";
 
-// Custom styled tooltip for charts
+type Selection =
+  | { type: "insight"; insight: InsightItem }
+  | { type: "metric"; metricTypeId: string }
+  | { type: "custom" };
+
 interface TooltipPayloadEntry {
   value?: number;
   name?: string;
@@ -114,13 +120,14 @@ function ChartTooltip({
   );
 }
 
+const METRICS_PER_PAGE = 5;
+
 export default function Insights() {
   const navigate = useNavigate();
   const theme = useMuiTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const isDark = theme.palette.mode === "dark";
 
-  // Chart colors from theme
   const chartColors = {
     primary: theme.palette.primary.main,
     secondary: isDark ? theme.palette.grey[500] : theme.palette.grey[400],
@@ -128,19 +135,17 @@ export default function Insights() {
     text: theme.palette.text.secondary,
   };
 
-  // Tab state
-  const [tab, setTab] = useState<"insights" | "compare">("insights");
-
-  // Auto insights state
   const [insights, setInsights] = useState<InsightItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-  const [selectedInsight, setSelectedInsight] = useState<InsightItem | null>(
-    null
-  );
-
-  // Custom compare state
   const [metricTypes, setMetricTypes] = useState<MetricType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [mobileShowDetail, setMobileShowDetail] = useState(false);
+
+  const [metricsPage, setMetricsPage] = useState(0);
+
   const [xMetric, setXMetric] = useState<string>("");
   const [yMetric, setYMetric] = useState<string>("");
   const [compareResult, setCompareResult] = useState<CompareResult | null>(
@@ -148,11 +153,21 @@ export default function Insights() {
   );
   const [comparing, setComparing] = useState(false);
 
-  // Individual analytics state
-  const [selectedMetricId, setSelectedMetricId] = useState<string>("");
-  const [analyticsData, setAnalyticsData] = useState<MetricAnalyticsResponse | null>(null);
+  const [analyticsData, setAnalyticsData] =
+    useState<MetricAnalyticsResponse | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
-  const [analyticsView, setAnalyticsView] = useState<"weekly" | "monthly">("weekly");
+  const [analyticsView, setAnalyticsView] = useState<"weekly" | "monthly">(
+    "weekly"
+  );
+
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => setShowSkeleton(true), 200);
+    return () => {
+      clearTimeout(timer);
+      setShowSkeleton(false);
+    };
+  }, [loading]);
 
   useEffect(() => {
     const load = async () => {
@@ -164,12 +179,13 @@ export default function Insights() {
 
       if (insightsRes.success) {
         setInsights(insightsRes.data.insights);
-        const firstCorrelation = insightsRes.data.insights.find(
-          (i) => i.insightType === "correlation"
-        );
-        setSelectedInsight(
-          firstCorrelation ?? insightsRes.data.insights[0] ?? null
-        );
+        // Auto-select first insight on desktop
+        if (insightsRes.data.insights.length > 0) {
+          setSelection({
+            type: "insight",
+            insight: insightsRes.data.insights[0],
+          });
+        }
       } else {
         setErr(insightsRes.error);
       }
@@ -183,15 +199,18 @@ export default function Insights() {
     void load();
   }, []);
 
-  // Auto-compare when both metrics selected
   useEffect(() => {
     if (!xMetric || !yMetric || xMetric === yMetric) {
       return;
     }
 
+    let cancelled = false;
+
     const doCompare = async () => {
       setComparing(true);
       const res = await compareMetrics(xMetric, yMetric);
+      if (cancelled) return;
+
       if (res.success) {
         setCompareResult(res.data);
       } else {
@@ -202,18 +221,24 @@ export default function Insights() {
     };
 
     void doCompare();
+
+    return () => {
+      cancelled = true;
+    };
   }, [xMetric, yMetric]);
 
-  // Auto-fetch analytics when metric selected
   useEffect(() => {
-    if (!selectedMetricId) {
-      setAnalyticsData(null);
+    if (selection?.type !== "metric") {
       return;
     }
 
+    let cancelled = false;
+
     const fetchAnalytics = async () => {
       setLoadingAnalytics(true);
-      const res = await getMetricAnalytics(selectedMetricId);
+      const res = await getMetricAnalytics(selection.metricTypeId);
+      if (cancelled) return;
+
       if (res.success) {
         setAnalyticsData(res.data);
       } else {
@@ -224,7 +249,46 @@ export default function Insights() {
     };
 
     void fetchAnalytics();
-  }, [selectedMetricId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selection]);
+
+  const totalMetricPages = Math.ceil(metricTypes.length / METRICS_PER_PAGE);
+
+  const validMetricsPage =
+    totalMetricPages > 0 ? Math.min(metricsPage, totalMetricPages - 1) : 0;
+
+  const paginatedMetrics = useMemo(() => {
+    const start = validMetricsPage * METRICS_PER_PAGE;
+    return metricTypes.slice(start, start + METRICS_PER_PAGE);
+  }, [metricTypes, validMetricsPage]);
+
+  const handleSelectInsight = (insight: InsightItem) => {
+    setSelection({ type: "insight", insight });
+    setAnalyticsData(null); // Clear stale analytics
+    if (isMobile) setMobileShowDetail(true);
+  };
+
+  const handleSelectMetric = (metricTypeId: string) => {
+    setSelection({ type: "metric", metricTypeId });
+    setAnalyticsData(null); // Clear stale analytics before new fetch
+    if (isMobile) setMobileShowDetail(true);
+  };
+
+  const handleSelectCustom = () => {
+    setSelection({ type: "custom" });
+    setAnalyticsData(null); // Clear stale analytics
+    setXMetric("");
+    setYMetric("");
+    setCompareResult(null);
+    if (isMobile) setMobileShowDetail(true);
+  };
+
+  const handleMobileBack = () => {
+    setMobileShowDetail(false);
+  };
 
   const getInsightIcon = (insight: InsightItem) => {
     switch (insight.insightType) {
@@ -252,22 +316,149 @@ export default function Insights() {
     }
   };
 
-  const renderVisualization = (insight: InsightItem) => {
+  const isInsightSelected = (insight: InsightItem) => {
+    if (selection?.type !== "insight") return false;
+    return (
+      selection.insight.metricTypeIdX === insight.metricTypeIdX &&
+      selection.insight.metricTypeIdY === insight.metricTypeIdY &&
+      selection.insight.insightType === insight.insightType
+    );
+  };
+
+  const isMetricSelected = (metricTypeId: string) => {
+    return (
+      selection?.type === "metric" && selection.metricTypeId === metricTypeId
+    );
+  };
+
+  // Render insight visualization (for correlation insights)
+  const renderInsightVisualization = (insight: InsightItem) => {
     if (insight.insightType !== "correlation" || !insight.comparisonData) {
-      // Single-metric insight - show simple stat
+      // Single-metric insight - show simple stat with details
       return (
-        <Box sx={{ textAlign: "center", py: 6 }}>
-          <Typography
-            variant="h2"
-            sx={{ fontWeight: 900, color: getInsightColor(insight) }}
-          >
-            {insight.insightType === "streak" && `${insight.strength} days`}
-            {insight.insightType === "consistency" && `${insight.strength}%`}
-            {insight.insightType === "average" && `${insight.strength}`}
-          </Typography>
-          <Typography color="text.secondary" sx={{ mt: 1 }}>
-            {insight.summary}
-          </Typography>
+        <Box sx={{ py: 4 }}>
+          <Box sx={{ textAlign: "center", mb: 3 }}>
+            <Typography
+              variant="h2"
+              sx={{ fontWeight: 600, color: getInsightColor(insight) }}
+            >
+              {insight.insightType === "streak" && `${insight.strength} days`}
+              {insight.insightType === "consistency" && `${insight.strength}%`}
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              {insight.summary}
+            </Typography>
+          </Box>
+
+          {/* Detailed explanation */}
+          {insight.detailedExplanation && (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2,
+                borderRadius: 2,
+                bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                {insight.detailedExplanation}
+              </Typography>
+            </Paper>
+          )}
+
+          {/* Extra data for streaks */}
+          {insight.streakData && (
+            <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: isDark
+                    ? "rgba(255,255,255,0.05)"
+                    : "rgba(0,0,0,0.03)",
+                  flex: 1,
+                  textAlign: "center",
+                }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  Personal Best
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {insight.streakData.maxStreak} days
+                </Typography>
+              </Paper>
+              {insight.streakData.daysUntilRecord > 0 && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: isDark
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(0,0,0,0.03)",
+                    flex: 1,
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    To Beat Record
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    {insight.streakData.daysUntilRecord} more
+                  </Typography>
+                </Paper>
+              )}
+            </Stack>
+          )}
+
+          {/* Extra data for consistency */}
+          {insight.consistencyData && (
+            <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  bgcolor: isDark
+                    ? "rgba(255,255,255,0.05)"
+                    : "rgba(0,0,0,0.03)",
+                  flex: 1,
+                  textAlign: "center",
+                }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  This Week
+                </Typography>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {insight.consistencyData.daysLogged}/
+                  {insight.consistencyData.totalDays}
+                </Typography>
+              </Paper>
+              {insight.consistencyData.previousWeekCount !== null && (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: isDark
+                      ? "rgba(255,255,255,0.05)"
+                      : "rgba(0,0,0,0.03)",
+                    flex: 1,
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography variant="caption" color="text.secondary">
+                    Last Week
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    {insight.consistencyData.previousWeekCount}/
+                    {insight.consistencyData.totalDays}
+                  </Typography>
+                </Paper>
+              )}
+            </Stack>
+          )}
         </Box>
       );
     }
@@ -300,256 +491,245 @@ export default function Insights() {
 
     return (
       <Stack spacing={3}>
+        {/* Summary */}
+        <Box>
+          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+            {insight.summary}
+          </Typography>
+          {/* Detailed explanation */}
+          {insight.detailedExplanation && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {insight.detailedExplanation}
+            </Typography>
+          )}
+        </Box>
+
         {/* Bar Chart - Comparison */}
         <Box>
           <Typography
-            variant="overline"
+            variant="subtitle2"
             color="text.secondary"
-            sx={{ fontWeight: 600, letterSpacing: 1 }}
+            sx={{ fontWeight: 600, mb: 1.5 }}
           >
             {comparisonData.valueType === "percentage"
               ? "Rate Comparison"
               : "Average Comparison"}
           </Typography>
-          <ResponsiveContainer width="100%" height={isMobile ? 100 : 120}>
-            <BarChart
-              data={barData}
-              layout="vertical"
-              margin={{
-                left: isMobile ? 0 : 10,
-                right: isMobile ? 10 : 30,
-                top: 10,
-                bottom: 0,
-              }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                horizontal={false}
-                stroke={chartColors.grid}
-              />
-              <XAxis
-                type="number"
-                domain={[
-                  0,
-                  comparisonData.valueType === "percentage" ? 100 : "auto",
-                ]}
-                tick={{ fontSize: isMobile ? 10 : 12, fill: chartColors.text }}
-                tickFormatter={(v: number) =>
-                  comparisonData.valueType === "percentage"
-                    ? `${v}%`
-                    : `${v}${
-                        comparisonData.unit ? ` ${comparisonData.unit}` : ""
-                      }`
-                }
-              />
-              <YAxis
-                type="category"
-                dataKey="name"
-                width={isMobile ? 100 : 160}
-                tick={{ fontSize: isMobile ? 10 : 12, fill: chartColors.text }}
-              />
-              <Tooltip
-                content={
-                  <ChartTooltip
-                    isDark={isDark}
-                    valueFormatter={(v) =>
-                      comparisonData.valueType === "percentage"
-                        ? `${v.toFixed(1)}%`
-                        : `${v.toFixed(1)}${
-                            comparisonData.unit ? ` ${comparisonData.unit}` : ""
-                          }`
-                    }
+
+          <Stack spacing={1.5} sx={{ mt: 1 }}>
+            {barData.map((item, idx) => (
+              <Box key={idx}>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  alignItems="center"
+                  sx={{ mb: 0.5 }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ fontWeight: 500 }}
+                  >
+                    {item.name}
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      color="text.disabled"
+                      sx={{ ml: 1 }}
+                    >
+                      ({item.count} days)
+                    </Typography>
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {comparisonData.valueType === "percentage"
+                      ? `${item.value.toFixed(0)}%`
+                      : `${item.value.toFixed(1)}${
+                          comparisonData.unit ? ` ${comparisonData.unit}` : ""
+                        }`}
+                  </Typography>
+                </Stack>
+                <Box
+                  sx={{
+                    height: 28,
+                    bgcolor: isDark
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(0,0,0,0.08)",
+                    borderRadius: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      height: "100%",
+                      width: `${
+                        comparisonData.valueType === "percentage"
+                          ? item.value
+                          : (item.value /
+                              Math.max(...barData.map((d) => d.value))) *
+                            100
+                      }%`,
+                      bgcolor:
+                        idx === 0 ? chartColors.primary : chartColors.secondary,
+                      borderRadius: 1,
+                      minWidth: item.value > 0 ? 4 : 0,
+                    }}
                   />
-                }
-              />
-              <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                <Cell fill={chartColors.primary} />
-                <Cell fill={chartColors.secondary} />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-          <Stack
-            direction="row"
-            justifyContent="center"
-            spacing={3}
-            sx={{ mt: 1 }}
-          >
-            <Stack direction="row" alignItems="center" spacing={0.5}>
-              <Box
-                sx={{
-                  width: 10,
-                  height: 10,
-                  bgcolor: chartColors.primary,
-                  borderRadius: 0.5,
-                }}
-              />
-              <Typography variant="caption" color="text.secondary">
-                {comparisonData.groupA.count} days
-              </Typography>
-            </Stack>
-            <Stack direction="row" alignItems="center" spacing={0.5}>
-              <Box
-                sx={{
-                  width: 10,
-                  height: 10,
-                  bgcolor: chartColors.secondary,
-                  borderRadius: 0.5,
-                }}
-              />
-              <Typography variant="caption" color="text.secondary">
-                {comparisonData.groupB.count} days
-              </Typography>
-            </Stack>
+                </Box>
+              </Box>
+            ))}
           </Stack>
         </Box>
 
-        {/* Scatter Plot */}
         {scatterWithJitter && scatterWithJitter.length > 0 && (
-          <Box>
-            <Typography
-              variant="overline"
-              color="text.secondary"
-              sx={{ fontWeight: 600, letterSpacing: 1 }}
-            >
-              Data Points
-            </Typography>
-            <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
-              <ScatterChart
-                margin={
-                  isMobile
-                    ? { top: 10, right: 10, bottom: 35, left: 35 }
-                    : { top: 10, right: 30, bottom: 40, left: 50 }
-                }
+          <>
+            <Divider sx={{ my: 3 }} />
+            <Box>
+              <Typography
+                variant="subtitle2"
+                color="text.secondary"
+                sx={{ fontWeight: 600, mb: 1.5 }}
               >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke={chartColors.grid}
-                />
-                <XAxis
-                  type="number"
-                  dataKey="xJitter"
-                  name={insight.metricX}
-                  domain={
-                    comparisonType === "boolean_numeric" ||
-                    comparisonType === "boolean_boolean"
-                      ? [-0.5, 1.5]
-                      : ["auto", "auto"]
+                Data Points
+              </Typography>
+              <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
+                <ScatterChart
+                  margin={
+                    isMobile
+                      ? { top: 10, right: 10, bottom: 35, left: 35 }
+                      : { top: 10, right: 30, bottom: 40, left: 50 }
                   }
-                  ticks={
-                    comparisonType === "boolean_numeric" ||
-                    comparisonType === "boolean_boolean"
-                      ? [0, 1]
-                      : undefined
-                  }
-                  tick={{
-                    fontSize: isMobile ? 10 : 12,
-                    fill: chartColors.text,
-                  }}
-                  tickFormatter={(v: number) => {
-                    if (
+                >
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    stroke={chartColors.grid}
+                  />
+                  <XAxis
+                    type="number"
+                    dataKey="xJitter"
+                    name={insight.metricX}
+                    domain={
                       comparisonType === "boolean_numeric" ||
                       comparisonType === "boolean_boolean"
-                    ) {
-                      return v === 0 ? "No" : v === 1 ? "Yes" : "";
+                        ? [-0.5, 1.5]
+                        : ["auto", "auto"]
                     }
-                    return String(v);
-                  }}
-                  label={
-                    isMobile
-                      ? undefined
-                      : {
-                          value: `${insight.metricX}${
-                            insight.unitX ? ` (${insight.unitX})` : ""
-                          }`,
-                          position: "bottom",
-                          offset: 5,
-                          style: { fontSize: 11, fill: chartColors.text },
-                        }
-                  }
-                />
-                <YAxis
-                  type="number"
-                  dataKey="y"
-                  name={insight.metricY ?? ""}
-                  domain={
-                    comparisonType === "boolean_boolean"
-                      ? [-0.5, 1.5]
-                      : ["auto", "auto"]
-                  }
-                  ticks={
-                    comparisonType === "boolean_boolean" ? [0, 1] : undefined
-                  }
-                  tick={{
-                    fontSize: isMobile ? 10 : 12,
-                    fill: chartColors.text,
-                  }}
-                  tickFormatter={(v: number) => {
-                    if (comparisonType === "boolean_boolean") {
-                      return v === 0 ? "No" : v === 1 ? "Yes" : "";
+                    ticks={
+                      comparisonType === "boolean_numeric" ||
+                      comparisonType === "boolean_boolean"
+                        ? [0, 1]
+                        : undefined
                     }
-                    return String(v);
-                  }}
-                  label={
-                    isMobile
-                      ? undefined
-                      : {
-                          value: `${insight.metricY ?? ""}${
-                            insight.unitY ? ` (${insight.unitY})` : ""
-                          }`,
-                          angle: -90,
-                          position: "insideLeft",
-                          style: {
-                            fontSize: 11,
-                            fill: chartColors.text,
-                            textAnchor: "middle",
-                          },
-                        }
-                  }
-                />
-                <Tooltip
-                  content={
-                    <ChartTooltip
-                      isDark={isDark}
-                      formatLabel={(label) => `Date: ${label}`}
-                      valueFormatter={(value, name) => {
-                        if (
-                          name === insight.metricX &&
-                          (comparisonType === "boolean_numeric" ||
-                            comparisonType === "boolean_boolean")
-                        ) {
-                          return value >= 0.5 ? "Yes" : "No";
-                        }
-                        if (
-                          name === (insight.metricY ?? "") &&
-                          comparisonType === "boolean_boolean"
-                        ) {
-                          return value >= 0.5 ? "Yes" : "No";
-                        }
-                        return String(value);
-                      }}
-                    />
-                  }
-                />
-                {comparisonType === "numeric_numeric" &&
-                  comparisonData.threshold && (
-                    <ReferenceLine
-                      x={comparisonData.threshold}
-                      stroke={chartColors.secondary}
-                      strokeDasharray="5 5"
-                    />
-                  )}
-                <Scatter
-                  name="Data"
-                  data={scatterWithJitter}
-                  fill={chartColors.primary}
-                  fillOpacity={0.7}
-                />
-              </ScatterChart>
-            </ResponsiveContainer>
-          </Box>
+                    tick={{
+                      fontSize: isMobile ? 10 : 12,
+                      fill: chartColors.text,
+                    }}
+                    tickFormatter={(v: number) => {
+                      if (
+                        comparisonType === "boolean_numeric" ||
+                        comparisonType === "boolean_boolean"
+                      ) {
+                        return v === 0 ? "No" : v === 1 ? "Yes" : "";
+                      }
+                      return String(v);
+                    }}
+                    label={
+                      isMobile
+                        ? undefined
+                        : {
+                            value: `${insight.metricX}${
+                              insight.unitX ? ` (${insight.unitX})` : ""
+                            }`,
+                            position: "bottom",
+                            offset: 5,
+                            style: { fontSize: 11, fill: chartColors.text },
+                          }
+                    }
+                  />
+                  <YAxis
+                    type="number"
+                    dataKey="y"
+                    name={insight.metricY ?? ""}
+                    domain={
+                      comparisonType === "boolean_boolean"
+                        ? [-0.5, 1.5]
+                        : ["auto", "auto"]
+                    }
+                    ticks={
+                      comparisonType === "boolean_boolean" ? [0, 1] : undefined
+                    }
+                    tick={{
+                      fontSize: isMobile ? 10 : 12,
+                      fill: chartColors.text,
+                    }}
+                    tickFormatter={(v: number) => {
+                      if (comparisonType === "boolean_boolean") {
+                        return v === 0 ? "No" : v === 1 ? "Yes" : "";
+                      }
+                      return String(v);
+                    }}
+                    label={
+                      isMobile
+                        ? undefined
+                        : {
+                            value: `${insight.metricY ?? ""}${
+                              insight.unitY ? ` (${insight.unitY})` : ""
+                            }`,
+                            angle: -90,
+                            position: "insideLeft",
+                            style: {
+                              fontSize: 11,
+                              fill: chartColors.text,
+                              textAnchor: "middle",
+                            },
+                          }
+                    }
+                  />
+                  <Tooltip
+                    content={
+                      <ChartTooltip
+                        isDark={isDark}
+                        formatLabel={(label) => `Date: ${label}`}
+                        valueFormatter={(value, name) => {
+                          if (
+                            name === insight.metricX &&
+                            (comparisonType === "boolean_numeric" ||
+                              comparisonType === "boolean_boolean")
+                          ) {
+                            return value >= 0.5 ? "Yes" : "No";
+                          }
+                          if (
+                            name === (insight.metricY ?? "") &&
+                            comparisonType === "boolean_boolean"
+                          ) {
+                            return value >= 0.5 ? "Yes" : "No";
+                          }
+                          return String(value);
+                        }}
+                      />
+                    }
+                  />
+                  {comparisonType === "numeric_numeric" &&
+                    comparisonData.threshold && (
+                      <ReferenceLine
+                        x={comparisonData.threshold}
+                        stroke={chartColors.secondary}
+                        strokeDasharray="5 5"
+                      />
+                    )}
+                  <Scatter
+                    name="Data"
+                    data={scatterWithJitter}
+                    fill={chartColors.primary}
+                    fillOpacity={0.7}
+                  />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </Box>
+          </>
         )}
 
-        {/* Summary Stats */}
+        <Divider sx={{ my: 3 }} />
+
         <Stack direction="row" spacing={2}>
           <Paper
             variant="outlined"
@@ -570,7 +750,7 @@ export default function Insights() {
             </Typography>
             <Typography
               variant={isMobile ? "body1" : "h6"}
-              sx={{ fontWeight: 800 }}
+              sx={{ fontWeight: 600 }}
             >
               {comparisonData.percentDiff > 0 ? "+" : ""}
               {comparisonData.percentDiff.toFixed(0)}
@@ -596,7 +776,7 @@ export default function Insights() {
             </Typography>
             <Typography
               variant={isMobile ? "body1" : "h6"}
-              sx={{ fontWeight: 800 }}
+              sx={{ fontWeight: 600 }}
             >
               {insight.dataPoints} days
             </Typography>
@@ -606,8 +786,8 @@ export default function Insights() {
     );
   };
 
-  // Render scatter plot for custom compare
-  const renderCompareVisualization = () => {
+  // Render custom compare visualization
+  const renderCustomCompareVisualization = () => {
     if (!compareResult || compareResult.points.length === 0) return null;
 
     const xType = metricTypes.find((m) => m.metricTypeId === xMetric);
@@ -726,7 +906,7 @@ export default function Insights() {
             </Typography>
             <Typography
               variant={isMobile ? "body1" : "h6"}
-              sx={{ fontWeight: 800 }}
+              sx={{ fontWeight: 600 }}
             >
               {compareResult.correlation !== null
                 ? `${(compareResult.correlation * 100).toFixed(0)}%`
@@ -752,7 +932,7 @@ export default function Insights() {
             </Typography>
             <Typography
               variant={isMobile ? "body1" : "h6"}
-              sx={{ fontWeight: 800 }}
+              sx={{ fontWeight: 600 }}
             >
               {compareResult.points.length} days
             </Typography>
@@ -762,514 +942,759 @@ export default function Insights() {
     );
   };
 
-  return (
-    <Box>
-      <Stack
-        direction={{ xs: "column", sm: "row" }}
-        alignItems={{ xs: "stretch", sm: "center" }}
-        justifyContent="space-between"
-        spacing={{ xs: 2, sm: 1 }}
-        sx={{ mb: 3 }}
-      >
-        {/* Title */}
-        <Stack direction="row" alignItems="center" spacing={1}>
-          <IconButton onClick={() => navigate("/dashboard")} aria-label="back">
-            <ArrowBackIcon />
-          </IconButton>
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 900 }}>
-              Insights
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Discover patterns and correlations
-            </Typography>
-          </Box>
+  // Render individual metric analytics
+  const renderMetricAnalytics = () => {
+    if (loadingAnalytics) {
+      return (
+        <Box>
+          <Stack direction="row" justifyContent="space-between" sx={{ mb: 3 }}>
+            <Skeleton variant="text" width={150} height={32} />
+            <Skeleton variant="rounded" width={120} height={36} />
+          </Stack>
+          <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+            {[1, 2, 3].map((i) => (
+              <Skeleton
+                key={i}
+                variant="rounded"
+                height={100}
+                sx={{ flex: 1 }}
+              />
+            ))}
+          </Stack>
+          <Skeleton variant="rounded" height={300} sx={{ mb: 3 }} />
+          <Skeleton variant="rounded" height={120} />
+        </Box>
+      );
+    }
+
+    if (!analyticsData) {
+      return (
+        <Box sx={{ textAlign: "center", py: 6 }}>
+          <Typography color="text.secondary">
+            No analytics data available
+          </Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <Box>
+        {/* Header with weekly/monthly toggle */}
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={2}
+          sx={{ mb: 3 }}
+        >
+          <Typography
+            variant={isMobile ? "body1" : "h6"}
+            sx={{ fontWeight: 600 }}
+          >
+            {analyticsData.metricName}
+          </Typography>
+          <ToggleButtonGroup
+            value={analyticsView}
+            exclusive
+            onChange={(_, value) => value && setAnalyticsView(value)}
+            size="small"
+          >
+            <ToggleButton value="weekly">Weekly</ToggleButton>
+            <ToggleButton value="monthly">Monthly</ToggleButton>
+          </ToggleButtonGroup>
         </Stack>
 
-        {/* Tabs */}
-        <Tabs
-          value={tab}
-          onChange={(_, v) => setTab(v)}
-          variant={isMobile ? "fullWidth" : "standard"}
+        {/* Stats cards */}
+        <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+              flex: 1,
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              sx={{ mb: 0.5 }}
+            >
+              <WhatshotIcon sx={{ fontSize: 20, color: "warning.main" }} />
+              <Typography variant="caption" color="text.secondary">
+                Current Streak
+              </Typography>
+            </Stack>
+            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+              {analyticsData.currentStreak}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              days
+            </Typography>
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+              flex: 1,
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              sx={{ mb: 0.5 }}
+            >
+              <TrendingUpIcon sx={{ fontSize: 20, color: "success.main" }} />
+              <Typography variant="caption" color="text.secondary">
+                Max Streak
+              </Typography>
+            </Stack>
+            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+              {analyticsData.maxStreak}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              days
+            </Typography>
+          </Paper>
+
+          <Paper
+            elevation={0}
+            sx={{
+              p: 2,
+              borderRadius: 2,
+              bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+              flex: 1,
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1}
+              sx={{ mb: 0.5 }}
+            >
+              <ShowChartIcon sx={{ fontSize: 20, color: "primary.main" }} />
+              <Typography variant="caption" color="text.secondary">
+                Average
+              </Typography>
+            </Stack>
+            <Typography variant="h4" sx={{ fontWeight: 600 }}>
+              {analyticsData.average.toFixed(1)}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {analyticsData.unit || "value"}
+            </Typography>
+          </Paper>
+        </Stack>
+
+        {/* Bar chart */}
+        <Paper
+          elevation={0}
           sx={{
-            minHeight: 40,
-            "& .MuiTab-root": { minHeight: 40, py: 1 },
+            p: 2,
+            borderRadius: 2,
+            bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+            mb: 3,
           }}
         >
-          <Tab
-            label={isMobile ? "Analytics" : "Metric Analytics"}
-            value="insights"
-            icon={<ShowChartIcon sx={{ fontSize: 20 }} />}
-            iconPosition="start"
-            sx={{ textTransform: "none", fontWeight: 700 }}
-          />
-          <Tab
-            label={isMobile ? "Compare" : "Compare"}
-            value="compare"
-            icon={<CompareArrowsIcon sx={{ fontSize: 20 }} />}
-            iconPosition="start"
-            sx={{ textTransform: "none", fontWeight: 700 }}
-          />
-        </Tabs>
-      </Stack>
+          <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 500 }}>
+            {analyticsView === "weekly" ? "Last 7 Days" : "Last 30 Days"}
+          </Typography>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart
+              data={
+                analyticsView === "weekly"
+                  ? analyticsData.weeklyData
+                  : analyticsData.monthlyData
+              }
+              margin={{ top: 20, right: 20, left: 0, bottom: 20 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+              <XAxis
+                dataKey="label"
+                tick={{ fill: chartColors.text, fontSize: 12 }}
+                stroke={chartColors.grid}
+              />
+              <YAxis
+                tick={{ fill: chartColors.text, fontSize: 12 }}
+                stroke={chartColors.grid}
+              />
+              <Tooltip
+                content={(props) => (
+                  <ChartTooltip
+                    {...props}
+                    isDark={isDark}
+                    valueFormatter={(value) =>
+                      `${value} ${analyticsData.unit || ""}`
+                    }
+                  />
+                )}
+              />
+              <ReferenceLine
+                y={analyticsData.average}
+                stroke={chartColors.primary}
+                strokeDasharray="5 5"
+                strokeWidth={2}
+                label={{
+                  value: `Avg: ${analyticsData.average.toFixed(1)}`,
+                  fill: chartColors.primary,
+                  fontSize: 12,
+                  position: "insideTopRight",
+                }}
+              />
+              <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                {(analyticsView === "weekly"
+                  ? analyticsData.weeklyData
+                  : analyticsData.monthlyData
+                ).map((entry, index) => (
+                  <Cell
+                    key={`cell-${index}`}
+                    fill={
+                      entry.isGoalMet
+                        ? theme.palette.success.main
+                        : chartColors.primary
+                    }
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </Paper>
 
-      {tab === "insights" ? (
-        // Metric Analytics Tab - Combined Metric List + Individual Analytics
-        <Stack direction={{ xs: "column", md: "row" }} spacing={3} sx={{ height: { md: "calc(100vh - 250px)" } }}>
-          {/* Left: Metric List */}
+        {/* Most consistent days */}
+        {analyticsData.consistentDays.length > 0 && (
           <Paper
-            variant="outlined"
+            elevation={0}
             sx={{
-              width: { xs: "100%", md: 320 },
               p: 2,
-              borderRadius: 3,
-              bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
-              overflowY: "auto",
-              maxHeight: { xs: 400, md: "100%" },
+              borderRadius: 2,
+              bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 500 }}>
+              Most Consistent Days
+            </Typography>
+            <Stack spacing={1}>
+              {analyticsData.consistentDays.slice(0, 3).map((day) => (
+                <Box key={day.dayName}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    sx={{ mb: 0.5 }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {day.dayName}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {day.count} entries ({day.percentage.toFixed(0)}%)
+                    </Typography>
+                  </Stack>
+                  <Box
+                    sx={{
+                      height: 6,
+                      borderRadius: 3,
+                      bgcolor: isDark
+                        ? "rgba(255,255,255,0.1)"
+                        : "rgba(0,0,0,0.1)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        height: "100%",
+                        width: `${day.percentage}%`,
+                        bgcolor: "primary.main",
+                        borderRadius: 3,
+                      }}
+                    />
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          </Paper>
+        )}
+      </Box>
+    );
+  };
+
+  // Render detail panel content based on selection
+  const renderDetailContent = () => {
+    if (!selection) {
+      return (
+        <Box sx={{ textAlign: "center", py: 8 }}>
+          <ShowChartIcon sx={{ fontSize: 64, opacity: 0.3, mb: 2 }} />
+          <Typography color="text.secondary">
+            Select an item to view details
+          </Typography>
+        </Box>
+      );
+    }
+
+    switch (selection.type) {
+      case "insight":
+        return renderInsightVisualization(selection.insight);
+
+      case "metric":
+        return renderMetricAnalytics();
+
+      case "custom":
+        return (
+          <Box>
+            <Typography
+              variant={isMobile ? "body1" : "h6"}
+              sx={{ fontWeight: 600, mb: 0.5 }}
+            >
+              Compare Metrics
+            </Typography>
+            <Typography
+              variant={isMobile ? "caption" : "body2"}
+              color="text.secondary"
+              sx={{ mb: 3 }}
+            >
+              Select two metrics to visualize their relationship
+            </Typography>
+
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              sx={{ mb: 3 }}
+            >
+              <TextField
+                select
+                label="X-Axis"
+                value={xMetric}
+                onChange={(e) => {
+                  setXMetric(e.target.value);
+                  setCompareResult(null);
+                }}
+                fullWidth
+                size={isMobile ? "small" : "medium"}
+                sx={{ maxWidth: { sm: 280 } }}
+              >
+                <MenuItem value="" disabled>
+                  Select a metric
+                </MenuItem>
+                {metricTypes.map((mt) => (
+                  <MenuItem
+                    key={mt.metricTypeId}
+                    value={mt.metricTypeId}
+                    disabled={mt.metricTypeId === yMetric}
+                  >
+                    {mt.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                select
+                label="Y-Axis"
+                value={yMetric}
+                onChange={(e) => {
+                  setYMetric(e.target.value);
+                  setCompareResult(null);
+                }}
+                fullWidth
+                size={isMobile ? "small" : "medium"}
+                sx={{ maxWidth: { sm: 280 } }}
+              >
+                <MenuItem value="" disabled>
+                  Select a metric
+                </MenuItem>
+                {metricTypes.map((mt) => (
+                  <MenuItem
+                    key={mt.metricTypeId}
+                    value={mt.metricTypeId}
+                    disabled={mt.metricTypeId === xMetric}
+                  >
+                    {mt.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </Stack>
+
+            {comparing ? (
+              <Box>
+                <Skeleton variant="rounded" height={350} sx={{ mb: 2 }} />
+                <Stack direction="row" spacing={2}>
+                  <Skeleton variant="rounded" height={80} sx={{ flex: 1 }} />
+                  <Skeleton variant="rounded" height={80} sx={{ flex: 1 }} />
+                </Stack>
+              </Box>
+            ) : compareResult ? (
+              compareResult.points.length === 0 ? (
+                <Box sx={{ textAlign: "center", py: 6 }}>
+                  <Typography color="text.secondary">
+                    No overlapping data for these metrics
+                  </Typography>
+                </Box>
+              ) : (
+                renderCustomCompareVisualization()
+              )
+            ) : xMetric && yMetric ? null : (
+              <Box sx={{ textAlign: "center", py: 6, color: "text.secondary" }}>
+                <CompareArrowsIcon sx={{ fontSize: 48, opacity: 0.3, mb: 2 }} />
+                <Typography>Select two different metrics to compare</Typography>
+              </Box>
+            )}
+          </Box>
+        );
+    }
+  };
+
+  // Left panel content (list view)
+  const renderListPanel = () => (
+    <Stack spacing={0}>
+      {/* Custom Compare */}
+      <Paper
+        variant="outlined"
+        onClick={handleSelectCustom}
+        sx={{
+          p: 1.5,
+          borderRadius: 2,
+          cursor: "pointer",
+          borderColor:
+            selection?.type === "custom" ? "primary.main" : "divider",
+          borderWidth: selection?.type === "custom" ? 2 : 1,
+          bgcolor:
+            selection?.type === "custom" ? "action.selected" : "transparent",
+          "&:hover": { bgcolor: "action.hover" },
+        }}
+      >
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Box
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: 1.5,
+              display: "grid",
+              placeItems: "center",
+              bgcolor: "secondary.main",
+              color: "white",
               flexShrink: 0,
             }}
           >
-            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-              Your Metrics ({metricTypes.length})
+            <CompareArrowsIcon />
+          </Box>
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              Custom Compare
             </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Compare any two metrics
+            </Typography>
+          </Box>
+        </Stack>
+      </Paper>
 
-            {loading ? (
-              <Box sx={{ textAlign: "center", py: 4 }}>
-                <CircularProgress size={32} />
-              </Box>
-            ) : metricTypes.length === 0 ? (
-              <Box sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
-                <ShowChartIcon sx={{ fontSize: 48, opacity: 0.3, mb: 2 }} />
-                <Typography variant="body2">
-                  No metrics available yet
-                </Typography>
-                <Typography variant="caption">
-                  Create metrics to view analytics
-                </Typography>
-              </Box>
-            ) : (
-              <Stack spacing={1}>
-                {metricTypes.map((metric) => (
-                  <Paper
-                    key={metric.metricTypeId}
-                    variant="outlined"
-                    onClick={() => setSelectedMetricId(metric.metricTypeId)}
+      <Divider sx={{ my: 2 }} />
+
+      {showSkeleton ? (
+        <Stack spacing={1}>
+          {[1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} variant="rounded" height={72} />
+          ))}
+        </Stack>
+      ) : loading ? null : insights.length === 0 ? (
+        <Fade in timeout={300}>
+          <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
+            <Typography variant="body2">No insights yet</Typography>
+            <Typography variant="caption">
+              Log more data to discover patterns
+            </Typography>
+          </Box>
+        </Fade>
+      ) : (
+        <Fade
+          in
+          timeout={300}
+          key={insights.map((i) => i.metricTypeIdX).join("-")}
+        >
+          <Stack spacing={1}>
+            {insights.map((insight, idx) => (
+              <Paper
+                key={`${insight.metricTypeIdX}-${
+                  insight.metricTypeIdY ?? "single"
+                }-${idx}`}
+                variant="outlined"
+                onClick={() => handleSelectInsight(insight)}
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  cursor: "pointer",
+                  borderColor: isInsightSelected(insight)
+                    ? "primary.main"
+                    : "divider",
+                  borderWidth: isInsightSelected(insight) ? 2 : 1,
+                  bgcolor: isInsightSelected(insight)
+                    ? "action.selected"
+                    : "transparent",
+                  transition: "all 0.2s ease-in-out",
+                  "&:hover": { bgcolor: "action.hover" },
+                }}
+              >
+                <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                  <Box
                     sx={{
-                      p: 1.5,
-                      borderRadius: 2,
-                      cursor: "pointer",
-                      borderColor:
-                        selectedMetricId === metric.metricTypeId
-                          ? "primary.main"
-                          : "divider",
-                      borderWidth: selectedMetricId === metric.metricTypeId ? 2 : 1,
-                      bgcolor:
-                        selectedMetricId === metric.metricTypeId
-                          ? "action.selected"
-                          : "transparent",
-                      "&:hover": {
-                        bgcolor: "action.hover",
-                      },
+                      width: 36,
+                      height: 36,
+                      borderRadius: 1.5,
+                      display: "grid",
+                      placeItems: "center",
+                      bgcolor: getInsightColor(insight),
+                      color: "white",
+                      flexShrink: 0,
                     }}
                   >
-                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                      <Box
-                        sx={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 1.5,
-                          display: "grid",
-                          placeItems: "center",
-                          bgcolor: "primary.main",
-                          color: "white",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <ShowChartIcon />
-                      </Box>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          variant="body2"
-                          sx={{
-                            fontWeight: 700,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
-                          }}
-                        >
-                          {metric.name}
-                        </Typography>
-                        <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                          <Chip
-                            size="small"
-                            label={metric.kind}
-                            sx={{ height: 20, fontSize: 10 }}
-                          />
-                          {metric.unit && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                            >
-                              {metric.unit}
-                            </Typography>
-                          )}
-                        </Stack>
-                      </Box>
-                    </Stack>
-                  </Paper>
-                ))}
-              </Stack>
-            )}
+                    {getInsightIcon(insight)}
+                  </Box>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 500,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                      }}
+                    >
+                      {insight.metricY
+                        ? `${insight.metricX} <-> ${insight.metricY}`
+                        : insight.metricX}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {insight.insightType} • {insight.dataPoints} days
+                    </Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+        </Fade>
+      )}
+
+      <Divider sx={{ my: 2 }} />
+
+      {/* Individual Metrics */}
+      {metricTypes.length === 0 ? (
+        <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
+          <Typography variant="body2">No metrics yet</Typography>
+        </Box>
+      ) : (
+        <>
+          <Stack spacing={1}>
+            {paginatedMetrics.map((metric) => (
+              <Paper
+                key={metric.metricTypeId}
+                variant="outlined"
+                onClick={() => handleSelectMetric(metric.metricTypeId)}
+                sx={{
+                  p: 1.5,
+                  borderRadius: 2,
+                  cursor: "pointer",
+                  borderColor: isMetricSelected(metric.metricTypeId)
+                    ? "primary.main"
+                    : "divider",
+                  borderWidth: isMetricSelected(metric.metricTypeId) ? 2 : 1,
+                  bgcolor: isMetricSelected(metric.metricTypeId)
+                    ? "action.selected"
+                    : "transparent",
+                  "&:hover": { bgcolor: "action.hover" },
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {metric.name}
+                </Typography>
+                <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                  <Chip
+                    size="small"
+                    label={metric.kind}
+                    sx={{ height: 20, fontSize: 10 }}
+                  />
+                  {metric.unit && (
+                    <Typography variant="caption" color="text.secondary">
+                      {metric.unit}
+                    </Typography>
+                  )}
+                </Stack>
+              </Paper>
+            ))}
+          </Stack>
+
+          {/* Pagination */}
+          {totalMetricPages > 1 && (
+            <Stack
+              direction="row"
+              justifyContent="center"
+              alignItems="center"
+              spacing={1}
+              sx={{ mt: 2 }}
+            >
+              <IconButton
+                size="small"
+                onClick={() => setMetricsPage((p) => Math.max(0, p - 1))}
+                disabled={validMetricsPage === 0}
+              >
+                <ChevronLeftIcon />
+              </IconButton>
+              <Typography variant="caption" color="text.secondary">
+                {validMetricsPage + 1} / {totalMetricPages}
+              </Typography>
+              <IconButton
+                size="small"
+                onClick={() =>
+                  setMetricsPage((p) => Math.min(totalMetricPages - 1, p + 1))
+                }
+                disabled={validMetricsPage >= totalMetricPages - 1}
+              >
+                <ChevronRightIcon />
+              </IconButton>
+            </Stack>
+          )}
+        </>
+      )}
+    </Stack>
+  );
+
+  // Mobile detail view header
+  const getMobileDetailTitle = () => {
+    if (!selection) return "Details";
+    switch (selection.type) {
+      case "insight":
+        return selection.insight.metricY
+          ? `${selection.insight.metricX} <-> ${selection.insight.metricY}`
+          : selection.insight.metricX;
+      case "metric": {
+        const metric = metricTypes.find(
+          (m) => m.metricTypeId === selection.metricTypeId
+        );
+        return metric?.name ?? "Metric";
+      }
+      case "custom":
+        return "Custom Compare";
+    }
+  };
+
+  return (
+    <Box>
+      {/* Header */}
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 3 }}>
+        <IconButton
+          onClick={() =>
+            isMobile && mobileShowDetail
+              ? handleMobileBack()
+              : navigate("/dashboard")
+          }
+          aria-label="back"
+        >
+          <ArrowBackIcon />
+        </IconButton>
+        <Box>
+          <Typography variant="h5" sx={{ fontWeight: 600 }}>
+            {isMobile && mobileShowDetail ? getMobileDetailTitle() : "Insights"}
+          </Typography>
+          {!(isMobile && mobileShowDetail) && (
+            <Typography variant="body2" color="text.secondary">
+              Discover patterns and correlations
+            </Typography>
+          )}
+        </Box>
+      </Stack>
+
+      {/* Content */}
+      {isMobile ? (
+        // Mobile: show either list or detail
+        mobileShowDetail ? (
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              borderRadius: 3,
+              bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+            }}
+          >
+            <Fade
+              in
+              timeout={200}
+              key={
+                selection
+                  ? `${selection.type}-${
+                      selection.type === "insight"
+                        ? selection.insight.metricTypeIdX
+                        : selection.type === "metric"
+                        ? selection.metricTypeId
+                        : "custom"
+                    }`
+                  : "none"
+              }
+            >
+              <Box>{renderDetailContent()}</Box>
+            </Fade>
+          </Paper>
+        ) : (
+          <Paper
+            variant="outlined"
+            sx={{
+              p: 2,
+              borderRadius: 3,
+              bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+            }}
+          >
+            {renderListPanel()}
+          </Paper>
+        )
+      ) : (
+        // Desktop: side-by-side
+        <Stack direction="row" spacing={3} sx={{ alignItems: "flex-start" }}>
+          {/* Left: List */}
+          <Paper
+            variant="outlined"
+            sx={{
+              width: 320,
+              p: 2,
+              borderRadius: 3,
+              bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+              flexShrink: 0,
+            }}
+          >
+            {renderListPanel()}
           </Paper>
 
-          {/* Right: Individual Analytics */}
+          {/* Right: Detail */}
           <Paper
             variant="outlined"
             sx={{
               flex: 1,
-              p: { xs: 2, sm: 3 },
+              p: 3,
               borderRadius: 3,
               bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
-              overflowY: "auto",
               minWidth: 0,
             }}
           >
-            {!selectedMetricId ? (
-              <Box sx={{ textAlign: "center", py: 8 }}>
-                <ShowChartIcon
-                  sx={{ fontSize: 64, opacity: 0.3, mb: 2 }}
-                />
-                <Typography color="text.secondary">
-                  Select a metric to view analytics
-                </Typography>
-              </Box>
-            ) : loadingAnalytics ? (
-              <Box sx={{ textAlign: "center", py: 6 }}>
-                <CircularProgress size={32} />
-              </Box>
-            ) : !analyticsData ? (
-              <Box sx={{ textAlign: "center", py: 6 }}>
-                <Typography color="text.secondary">
-                  No analytics data available for this metric
-                </Typography>
-              </Box>
-            ) : (
-              <Box>
-                {/* Header with weekly/monthly toggle */}
-                <Stack
-                  direction={{ xs: "column", sm: "row" }}
-                  justifyContent="space-between"
-                  alignItems={{ xs: "flex-start", sm: "center" }}
-                  spacing={2}
-                  sx={{ mb: 3 }}
-                >
-                  <Typography variant={isMobile ? "body1" : "h6"} sx={{ fontWeight: 800 }}>
-                    {analyticsData.metricName}
-                  </Typography>
-                  <ToggleButtonGroup
-                    value={analyticsView}
-                    exclusive
-                    onChange={(_, value) => value && setAnalyticsView(value)}
-                    size="small"
-                  >
-                    <ToggleButton value="weekly">Weekly</ToggleButton>
-                    <ToggleButton value="monthly">Monthly</ToggleButton>
-                  </ToggleButtonGroup>
-                </Stack>
-
-                {/* Stats cards */}
-                <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      borderRadius: 2,
-                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-                      flex: 1,
-                    }}
-                  >
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                      <WhatshotIcon sx={{ fontSize: 20, color: "warning.main" }} />
-                      <Typography variant="caption" color="text.secondary">
-                        Current Streak
-                      </Typography>
-                    </Stack>
-                    <Typography variant="h4" sx={{ fontWeight: 900 }}>
-                      {analyticsData.currentStreak}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      days
-                    </Typography>
-                  </Paper>
-
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      borderRadius: 2,
-                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-                      flex: 1,
-                    }}
-                  >
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                      <TrendingUpIcon sx={{ fontSize: 20, color: "success.main" }} />
-                      <Typography variant="caption" color="text.secondary">
-                        Max Streak
-                      </Typography>
-                    </Stack>
-                    <Typography variant="h4" sx={{ fontWeight: 900 }}>
-                      {analyticsData.maxStreak}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      days
-                    </Typography>
-                  </Paper>
-
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      borderRadius: 2,
-                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-                      flex: 1,
-                    }}
-                  >
-                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                      <ShowChartIcon sx={{ fontSize: 20, color: "primary.main" }} />
-                      <Typography variant="caption" color="text.secondary">
-                        Average
-                      </Typography>
-                    </Stack>
-                    <Typography variant="h4" sx={{ fontWeight: 900 }}>
-                      {analyticsData.average.toFixed(1)}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {analyticsData.unit || "value"}
-                    </Typography>
-                  </Paper>
-                </Stack>
-
-                {/* Bar chart */}
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-                    mb: 3,
-                  }}
-                >
-                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>
-                    {analyticsView === "weekly" ? "Last 7 Days" : "Last 30 Days"}
-                  </Typography>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart
-                      data={analyticsView === "weekly" ? analyticsData.weeklyData : analyticsData.monthlyData}
-                      margin={{ top: 20, right: 20, left: 0, bottom: 20 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
-                      <XAxis
-                        dataKey="label"
-                        tick={{ fill: chartColors.text, fontSize: 12 }}
-                        stroke={chartColors.grid}
-                      />
-                      <YAxis
-                        tick={{ fill: chartColors.text, fontSize: 12 }}
-                        stroke={chartColors.grid}
-                      />
-                      <Tooltip
-                        content={(props) => (
-                          <ChartTooltip
-                            {...props}
-                            isDark={isDark}
-                            valueFormatter={(value) => `${value} ${analyticsData.unit || ""}`}
-                          />
-                        )}
-                      />
-                      {/* Average reference line */}
-                      <ReferenceLine
-                        y={analyticsData.average}
-                        stroke={chartColors.primary}
-                        strokeDasharray="5 5"
-                        strokeWidth={2}
-                        label={{
-                          value: `Avg: ${analyticsData.average.toFixed(1)}`,
-                          fill: chartColors.primary,
-                          fontSize: 12,
-                          position: "insideTopRight",
-                        }}
-                      />
-                      <Bar dataKey="value" radius={[8, 8, 0, 0]}>
-                        {(analyticsView === "weekly" ? analyticsData.weeklyData : analyticsData.monthlyData).map((entry, index) => (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={entry.isGoalMet ? theme.palette.success.main : chartColors.primary}
-                          />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Paper>
-
-                {/* Most consistent days */}
-                {analyticsData.consistentDays.length > 0 && (
-                  <Paper
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      borderRadius: 2,
-                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-                    }}
-                  >
-                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>
-                      Most Consistent Days
-                    </Typography>
-                    <Stack spacing={1}>
-                      {analyticsData.consistentDays.slice(0, 3).map((day) => (
-                        <Box key={day.dayName}>
-                          <Stack
-                            direction="row"
-                            justifyContent="space-between"
-                            sx={{ mb: 0.5 }}
-                          >
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                              {day.dayName}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {day.count} entries ({day.percentage.toFixed(0)}%)
-                            </Typography>
-                          </Stack>
-                          <Box
-                            sx={{
-                              height: 6,
-                              borderRadius: 3,
-                              bgcolor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
-                              overflow: "hidden",
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                height: "100%",
-                                width: `${day.percentage}%`,
-                                bgcolor: "primary.main",
-                                borderRadius: 3,
-                              }}
-                            />
-                          </Box>
-                        </Box>
-                      ))}
-                    </Stack>
-                  </Paper>
-                )}
-              </Box>
-            )}
+            <Fade
+              in
+              timeout={200}
+              key={
+                selection
+                  ? `${selection.type}-${
+                      selection.type === "insight"
+                        ? selection.insight.metricTypeIdX
+                        : selection.type === "metric"
+                        ? selection.metricTypeId
+                        : "custom"
+                    }`
+                  : "none"
+              }
+            >
+              <Box>{renderDetailContent()}</Box>
+            </Fade>
           </Paper>
         </Stack>
-      ) : (
-        // Custom Compare Tab
-        <Paper
-          variant="outlined"
-          sx={{
-            p: { xs: 2, sm: 3 },
-            borderRadius: 3,
-            bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
-          }}
-        >
-          <Typography
-            variant={isMobile ? "body1" : "h6"}
-            sx={{ fontWeight: 800, mb: 0.5 }}
-          >
-            Compare Metrics
-          </Typography>
-          <Typography
-            variant={isMobile ? "caption" : "body2"}
-            color="text.secondary"
-            sx={{ mb: 3 }}
-          >
-            Select two metrics to visualize their relationship
-          </Typography>
-
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={2}
-            sx={{ mb: 3 }}
-          >
-            <TextField
-              select
-              label="X-Axis (Independent)"
-              value={xMetric}
-              onChange={(e) => {
-                setXMetric(e.target.value);
-                setCompareResult(null);
-              }}
-              fullWidth
-              size={isMobile ? "small" : "medium"}
-              sx={{ maxWidth: { sm: 280 } }}
-            >
-              <MenuItem value="" disabled>
-                Select a metric
-              </MenuItem>
-              {metricTypes.map((mt) => (
-                <MenuItem
-                  key={mt.metricTypeId}
-                  value={mt.metricTypeId}
-                  disabled={mt.metricTypeId === yMetric}
-                >
-                  {mt.name} ({mt.kind})
-                </MenuItem>
-              ))}
-            </TextField>
-
-            <TextField
-              select
-              label="Y-Axis (Dependent)"
-              value={yMetric}
-              onChange={(e) => {
-                setYMetric(e.target.value);
-                setCompareResult(null);
-              }}
-              fullWidth
-              size={isMobile ? "small" : "medium"}
-              sx={{ maxWidth: { sm: 280 } }}
-            >
-              <MenuItem value="" disabled>
-                Select a metric
-              </MenuItem>
-              {metricTypes.map((mt) => (
-                <MenuItem
-                  key={mt.metricTypeId}
-                  value={mt.metricTypeId}
-                  disabled={mt.metricTypeId === xMetric}
-                >
-                  {mt.name} ({mt.kind})
-                </MenuItem>
-              ))}
-            </TextField>
-          </Stack>
-
-          {comparing ? (
-            <Box sx={{ textAlign: "center", py: 6 }}>
-              <CircularProgress size={32} />
-            </Box>
-          ) : compareResult ? (
-            compareResult.points.length === 0 ? (
-              <Box sx={{ textAlign: "center", py: 6 }}>
-                <Typography color="text.secondary">
-                  No overlapping data for these metrics
-                </Typography>
-              </Box>
-            ) : (
-              renderCompareVisualization()
-            )
-          ) : xMetric && yMetric ? null : (
-            <Box sx={{ textAlign: "center", py: 6, color: "text.secondary" }}>
-              <CompareArrowsIcon sx={{ fontSize: 48, opacity: 0.3, mb: 2 }} />
-              <Typography>Select two different metrics to compare</Typography>
-            </Box>
-          )}
-        </Paper>
       )}
 
       {/* Error Snackbar */}

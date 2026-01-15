@@ -1,12 +1,14 @@
 // src/context/ThemeProvider.tsx
 
 /**
- * // These all pull from the theme automatically
-        <Button color="primary">Main action</Button>
-        <Button color="secondary">Secondary</Button>
-        <Typography color="success.main">+0.73</Typography>
-        <Typography color="error.main">-0.45</Typography>
-        <Box sx={{ bgcolor: 'background.paper' }}>Card</Box>
+ * Usage examples - these all pull from the theme automatically:
+ *   <Button color="primary">Main action</Button>
+ *   <Typography color="success.main">+0.73</Typography>
+ *   <Box sx={{ bgcolor: 'background.paper' }}>Card</Box>
+ *
+ * Fonts: Unbounded (display) + Manrope (body)
+ * Add to index.html:
+ *   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@400;500;600;700&display=swap" rel="stylesheet">
  */
 
 import { useState, useMemo } from "react";
@@ -21,27 +23,135 @@ import type { ReactNode } from "react";
 type ThemeMode = "light" | "dark";
 
 // ===========================================
-// CUSTOMIZE COLORS HERE
+// COLORS
 // ===========================================
 
 const colors = {
   light: {
-    primary: "#1976d2", // main buttons, links
-    secondary: "#9c27b0", // secondary actions
-    background: "#fafafa", // page background
-    paper: "#ffffff", // cards, menus
-    error: "#d32f2f", // error states
-    success: "#2e7d32", // success states (positive correlation)
-    warning: "#ed6c02", // warnings
+    primary: "#1e3a5f", // navy from logo
+    secondary: "#4a9ead", // muted teal accent
+    background: "#f8fafc", // cool white
+    paper: "#ffffff",
+    error: "#c53030", // warm red
+    success: "#2f855a", // forest green
+    warning: "#c05621", // burnt orange
   },
   dark: {
-    primary: "#90caf9",
-    secondary: "#ce93d8",
-    background: "#121212",
-    paper: "#1e1e1e",
-    error: "#f44336",
-    success: "#66bb6a",
-    warning: "#ffa726",
+    primary: "#7dd3e8", // soft cyan
+    secondary: "#4a9ead", // muted teal
+    background: "#0c1929", // deep navy
+    paper: "#162033", // navy-grey
+    error: "#fc8181", // soft red
+    success: "#68d391", // soft green
+    warning: "#f6ad55", // soft orange
+  },
+};
+
+// ===========================================
+// TYPOGRAPHY
+// ===========================================
+
+const fontFamily = '"Manrope", system-ui, -apple-system, sans-serif';
+const displayFont = '"Plus Jakarta Sans", system-ui, -apple-system, sans-serif';
+
+const typography = {
+  fontFamily,
+
+  // Display - Plus Jakarta Sans (heroes, landing, app name)
+  h1: {
+    fontFamily: displayFont,
+    fontWeight: 700,
+    fontSize: "3rem",
+    lineHeight: 1.2,
+    letterSpacing: "-0.02em",
+  },
+  h2: {
+    fontFamily: displayFont,
+    fontWeight: 700,
+    fontSize: "2.25rem",
+    lineHeight: 1.2,
+    letterSpacing: "-0.01em",
+  },
+  h3: {
+    fontFamily: displayFont,
+    fontWeight: 600,
+    fontSize: "1.75rem",
+    lineHeight: 1.3,
+    letterSpacing: "-0.01em",
+  },
+
+  // UI Headers - Manrope (page titles, section headers)
+  h4: {
+    fontFamily,
+    fontWeight: 600,
+    fontSize: "1.5rem",
+    lineHeight: 1.3,
+  },
+  h5: {
+    fontFamily,
+    fontWeight: 600,
+    fontSize: "1.25rem",
+    lineHeight: 1.4,
+  },
+  h6: {
+    fontFamily,
+    fontWeight: 600,
+    fontSize: "1rem",
+    lineHeight: 1.4,
+  },
+
+  // Card titles
+  subtitle1: {
+    fontFamily,
+    fontWeight: 500,
+    fontSize: "1rem",
+    lineHeight: 1.5,
+  },
+  subtitle2: {
+    fontFamily,
+    fontWeight: 500,
+    fontSize: "0.875rem",
+    lineHeight: 1.5,
+  },
+
+  // Body text
+  body1: {
+    fontFamily,
+    fontWeight: 400,
+    fontSize: "1rem",
+    lineHeight: 1.6,
+  },
+  body2: {
+    fontFamily,
+    fontWeight: 400,
+    fontSize: "0.875rem",
+    lineHeight: 1.6,
+  },
+
+  // Labels, metadata
+  caption: {
+    fontFamily,
+    fontWeight: 400,
+    fontSize: "0.75rem",
+    lineHeight: 1.5,
+  },
+
+  // Category labels
+  overline: {
+    fontFamily,
+    fontWeight: 500,
+    fontSize: "0.75rem",
+    lineHeight: 1.5,
+    letterSpacing: "0.05em",
+    textTransform: "uppercase" as const,
+  },
+
+  // Buttons
+  button: {
+    fontFamily,
+    fontWeight: 500,
+    fontSize: "0.875rem",
+    textTransform: "none" as const,
   },
 };
 
@@ -61,21 +171,23 @@ const getTheme = (mode: ThemeMode) =>
       success: { main: colors[mode].success },
       warning: { main: colors[mode].warning },
     },
-    typography: {
-      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-      // Adjust sizes here if needed
-      h2: { fontWeight: 800 },
-      h5: { fontWeight: 300 },
-      h6: { fontWeight: 700 },
-    },
+    typography,
     shape: {
-      borderRadius: 8, // rounded corners on everything
+      borderRadius: 8,
     },
     components: {
       MuiButton: {
         styleOverrides: {
           root: {
-            textTransform: "none", // no ALL CAPS on buttons
+            textTransform: "none",
+            fontWeight: 500,
+          },
+        },
+      },
+      MuiChip: {
+        styleOverrides: {
+          root: {
+            fontWeight: 500,
           },
         },
       },

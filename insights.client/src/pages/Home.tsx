@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { alpha } from "@mui/material/styles";
 import {
   Alert,
   Box,
@@ -15,6 +16,7 @@ import {
   LinearProgress,
   MenuItem,
   Paper,
+  Skeleton,
   Snackbar,
   Stack,
   TextField,
@@ -27,11 +29,10 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
 import HistoryIcon from "@mui/icons-material/History";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
-import WhatshotIcon from "@mui/icons-material/Whatshot";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CheckIcon from "@mui/icons-material/Check";
+import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
 
 import {
   getMetricTypes,
@@ -65,7 +66,7 @@ function daysInMonth(d: Date) {
   return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 }
 
-const cadenceLabel = (c: GoalCadence) => (c === 0 ? "Daily" : "Weekly");
+const cadenceLabel = (c: GoalCadence) => (c === "Daily" ? "Daily" : "Weekly");
 
 // Helper functions for day bit flags
 // Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
@@ -114,6 +115,7 @@ export default function Home() {
   const [topInsight, setTopInsight] = useState<InsightItem | null>(null);
 
   const [initialLoading, setInitialLoading] = useState(true);
+  const [showSkeleton, setShowSkeleton] = useState(false);
   const [mutatingKey, setMutatingKey] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [logPage, setLogPage] = useState(0);
@@ -121,6 +123,15 @@ export default function Home() {
 
   const METRICS_PER_PAGE = 5;
   const GRIDS_PER_PAGE = 6;
+
+  useEffect(() => {
+    if (!initialLoading) return;
+    const timer = setTimeout(() => setShowSkeleton(true), 200);
+    return () => {
+      clearTimeout(timer);
+      setShowSkeleton(false);
+    };
+  }, [initialLoading]);
 
   const [logDialog, setLogDialog] = useState<LogDialogState>({
     open: false,
@@ -135,7 +146,7 @@ export default function Home() {
     kind: "Boolean",
     unit: "",
     hasGoal: false,
-    goalCadence: 1,
+    goalCadence: "Weekly",
     goalValue: "5",
     goalDays: 127, // All days selected by default
   });
@@ -294,7 +305,7 @@ export default function Home() {
       let meta = "";
       let progress = 0;
 
-      if (cadence === 0) {
+      if (cadence === "Daily") {
         const todayMetric = metricByTypeAndDate.get(
           `${mt.metricTypeId}|${today}`
         );
@@ -472,7 +483,7 @@ export default function Home() {
       kind: "Boolean",
       unit: "",
       hasGoal: false,
-      goalCadence: 1,
+      goalCadence: "Weekly",
       goalValue: "5",
       goalDays: 127,
     });
@@ -484,7 +495,7 @@ export default function Home() {
       kind: "Boolean",
       unit: "",
       hasGoal: false,
-      goalCadence: 1,
+      goalCadence: "Weekly",
       goalValue: "5",
       goalDays: 127, // Reset to all days
     });
@@ -505,15 +516,18 @@ export default function Home() {
       }
 
       gv = Math.floor(goalValueNum);
-      if (createState.kind === "Boolean" && createState.goalCadence === 0)
+      if (createState.kind === "Boolean" && createState.goalCadence === "Daily")
         gv = Math.min(1, gv);
-      if (createState.kind === "Boolean" && createState.goalCadence === 1)
+      if (
+        createState.kind === "Boolean" &&
+        createState.goalCadence === "Weekly"
+      )
         gv = Math.min(7, gv);
     }
 
     // Validate goal days for daily cadence
-    let goalDays = createState.goalDays;
-    if (createState.hasGoal && createState.goalCadence === 0) {
+    const goalDays = createState.goalDays;
+    if (createState.hasGoal && createState.goalCadence === "Daily") {
       if (goalDays <= 0) {
         return setErr("Please select at least one day for your daily goal.");
       }
@@ -541,7 +555,7 @@ export default function Home() {
       variant="outlined"
       sx={{ p: 2, borderRadius: 3, height: "100%", overflow: "hidden" }}
     >
-      <Typography variant="subtitle2" sx={{ fontWeight: 900, mb: 1.5 }} noWrap>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }} noWrap>
         {mt.name}
       </Typography>
 
@@ -576,11 +590,22 @@ export default function Home() {
 
   return (
     <Box sx={{ width: "100%" }}>
-      {initialLoading ? (
-        <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-          <Typography color="text.secondary">Loading dashboard…</Typography>
-        </Paper>
-      ) : (
+      {showSkeleton ? (
+        <Grid container spacing={3}>
+          <Grid size={12}>
+            <Skeleton variant="rounded" height={72} sx={{ borderRadius: 3 }} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 7 }}>
+            <Skeleton variant="rounded" height={320} sx={{ borderRadius: 3 }} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <Skeleton variant="rounded" height={320} sx={{ borderRadius: 3 }} />
+          </Grid>
+          <Grid size={12}>
+            <Skeleton variant="rounded" height={200} sx={{ borderRadius: 3 }} />
+          </Grid>
+        </Grid>
+      ) : initialLoading ? null : (
         <Grid container spacing={3}>
           {/* Top Insight Card */}
           {topInsight && (
@@ -588,125 +613,57 @@ export default function Home() {
               <Paper
                 variant="outlined"
                 sx={{
-                  p: { xs: 2, sm: 3 },
+                  p: 2,
                   borderRadius: 3,
-                  background: (theme) =>
-                    theme.palette.mode === "dark"
-                      ? "linear-gradient(135deg, rgba(25,118,210,0.08) 0%, rgba(25,118,210,0.02) 100%)"
-                      : "linear-gradient(135deg, rgba(25,118,210,0.06) 0%, rgba(25,118,210,0.01) 100%)",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  borderColor: "primary.light",
+                  bgcolor: (theme) =>
+                    alpha(
+                      theme.palette.primary.main,
+                      theme.palette.mode === "dark" ? 0.08 : 0.04
+                    ),
+                  "&:hover": {
+                    borderColor: "primary.main",
+                    bgcolor: (theme) =>
+                      alpha(
+                        theme.palette.primary.main,
+                        theme.palette.mode === "dark" ? 0.12 : 0.08
+                      ),
+                  },
                 }}
+                onClick={() => navigate("/insights")}
               >
-                <Stack
-                  direction="row"
-                  spacing={{ xs: 2, sm: 3 }}
-                  alignItems="flex-start"
-                >
-                  {/* Icon - hidden on mobile */}
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      flexShrink: 0,
-                      borderRadius: 2,
-                      display: { xs: "none", sm: "grid" },
-                      placeItems: "center",
-                      bgcolor:
-                        topInsight.insightType === "correlation"
-                          ? "primary.main"
-                          : topInsight.insightType === "streak"
-                          ? "warning.main"
-                          : topInsight.insightType === "consistency"
-                          ? "success.main"
-                          : "info.main",
-                      color: "white",
-                    }}
-                  >
-                    {topInsight.insightType === "streak" ? (
-                      <WhatshotIcon />
-                    ) : topInsight.insightType === "consistency" ? (
-                      <CheckCircleIcon />
-                    ) : topInsight.insightType === "correlation" ? (
-                      <ShowChartIcon />
-                    ) : (
-                      <TrendingUpIcon />
-                    )}
-                  </Box>
-
-                  <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Stack direction="row" alignItems="center" spacing={1.5}>
+                  <TipsAndUpdatesIcon sx={{ color: "#facc15", fontSize: 24 }} />
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
                     <Typography
                       variant="body2"
-                      color="text.secondary"
-                      sx={{ mb: 0.5 }}
-                    >
-                      {topInsight.insightType === "correlation"
-                        ? "Correlation"
-                        : topInsight.insightType === "streak"
-                        ? "Streak"
-                        : topInsight.insightType === "consistency"
-                        ? "Consistency"
-                        : "Average"}
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{
-                        fontWeight: { xs: 600, sm: 700 },
-                        lineHeight: 1.4,
-                        fontSize: { xs: "0.9rem", sm: "1rem" },
-                      }}
+                      sx={{ fontWeight: 600, lineHeight: 1.4 }}
                     >
                       {topInsight.summary}
                     </Typography>
-                    <Stack
-                      direction="row"
-                      spacing={1}
-                      sx={{ mt: 1, flexWrap: "wrap", gap: 0.5 }}
-                    >
-                      {topInsight.insightType === "correlation" &&
-                      topInsight.metricY ? (
-                        <>
-                          <Chip
-                            size="small"
-                            label={`${topInsight.metricX} ↔ ${topInsight.metricY}`}
-                            variant="outlined"
-                            sx={{ height: 22, fontSize: 11 }}
-                          />
-                          <Typography variant="caption" color="text.secondary">
-                            {topInsight.comparisonData?.percentDiff !==
-                            undefined
-                              ? `${
-                                  topInsight.comparisonData.percentDiff > 0
-                                    ? "+"
-                                    : ""
-                                }${topInsight.comparisonData.percentDiff.toFixed(
-                                  0
-                                )}%`
-                              : ""}{" "}
-                            • {topInsight.dataPoints} days
-                          </Typography>
-                        </>
-                      ) : (
-                        <Chip
-                          size="small"
-                          label={topInsight.metricX}
-                          variant="outlined"
-                          sx={{ height: 22, fontSize: 11 }}
-                        />
-                      )}
-                    </Stack>
-                    <Typography
-                      variant="body2"
-                      onClick={() => navigate("/insights")}
-                      sx={{
-                        mt: 1.5,
-                        cursor: "pointer",
-                        color: "primary.main",
-                        fontWeight: 600,
-                        "&:hover": { textDecoration: "underline" },
-                      }}
-                    >
-                      View all insights →
+                    <Typography variant="caption" color="text.secondary">
+                      {topInsight.dataPoints} days
                     </Typography>
                   </Box>
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    spacing={0.5}
+                    sx={{ color: "primary.main", flexShrink: 0 }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                        display: { xs: "none", sm: "block" },
+                      }}
+                    >
+                      Explore
+                    </Typography>
+                    <ArrowForwardIcon sx={{ fontSize: 18 }} />
+                  </Stack>
                 </Stack>
               </Paper>
             </Grid>
@@ -726,7 +683,7 @@ export default function Home() {
                 <ShowChartIcon
                   sx={{ fontSize: 40, color: "text.disabled", mb: 1 }}
                 />
-                <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                <Typography variant="body1" sx={{ fontWeight: 500 }}>
                   Not enough data for insights yet
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -749,7 +706,7 @@ export default function Home() {
                 sx={{ mb: 2 }}
               >
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
                     Log today
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
@@ -803,7 +760,7 @@ export default function Home() {
                         <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                           <Typography
                             variant="body2"
-                            sx={{ fontWeight: 800 }}
+                            sx={{ fontWeight: 600 }}
                             noWrap
                           >
                             {mt.name}
@@ -827,7 +784,7 @@ export default function Home() {
                               minWidth: 148,
                               height: 40,
                               textTransform: "none",
-                              fontWeight: 700,
+                              fontWeight: 500,
                               borderRadius: 2,
                             }}
                           >
@@ -924,7 +881,7 @@ export default function Home() {
               variant="outlined"
               sx={{ p: 3, borderRadius: 3, height: "100%" }}
             >
-              <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                 Goals
               </Typography>
 
@@ -939,7 +896,7 @@ export default function Home() {
                   <Typography variant="body2" color="text.secondary">
                     Today's progress
                   </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     {Math.round(todayPct * 100)}%
                   </Typography>
                 </Stack>
@@ -971,11 +928,11 @@ export default function Home() {
                         justifyContent="space-between"
                         sx={{ mb: 0.5 }}
                       >
-                        <Typography variant="body2" sx={{ fontWeight: 800 }}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {g.label}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {g.meta} • {g.cadenceLabel}
+                          {g.meta} | {g.cadenceLabel}
                         </Typography>
                       </Stack>
                       <LinearProgress
@@ -999,7 +956,7 @@ export default function Home() {
                 alignItems="center"
                 sx={{ mb: 2 }}
               >
-                <Typography variant="h6" sx={{ fontWeight: 900 }}>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
                   Activity this month
                 </Typography>
                 {totalGridPages > 1 && (
@@ -1104,7 +1061,7 @@ export default function Home() {
             >
               <MenuItem value="Boolean">Boolean (yes / no)</MenuItem>
               <MenuItem value="Number">Number (count / score)</MenuItem>
-              <MenuItem value="Duration">Duration (minutes)</MenuItem>
+              <MenuItem value="Duration">Duration (time)</MenuItem>
             </TextField>
 
             {createState.kind !== "Boolean" && (
@@ -1140,21 +1097,21 @@ export default function Home() {
                   onChange={(e) =>
                     setCreateState((s) => ({
                       ...s,
-                      goalCadence: Number(e.target.value) as GoalCadence,
+                      goalCadence: e.target.value as GoalCadence,
                     }))
                   }
                   fullWidth
                 >
-                  <MenuItem value={0}>Daily</MenuItem>
-                  <MenuItem value={1}>Weekly</MenuItem>
+                  <MenuItem value="Daily">Daily</MenuItem>
+                  <MenuItem value="Weekly">Weekly</MenuItem>
                 </TextField>
 
                 <TextField
                   label={
                     createState.kind === "Boolean" &&
-                    createState.goalCadence === 1
+                    createState.goalCadence === "Weekly"
                       ? "Goal (days per week)"
-                      : createState.goalCadence === 0
+                      : createState.goalCadence === "Daily"
                       ? "Goal (per day)"
                       : "Goal (per week)"
                   }
@@ -1167,13 +1124,19 @@ export default function Home() {
                 />
 
                 {/* Day selection for daily goals */}
-                {createState.goalCadence === 0 && (
+                {createState.goalCadence === "Daily" && (
                   <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: "block", mb: 1 }}
+                    >
                       Active on these days:
                     </Typography>
                     <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                      {(Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>).map((day) => (
+                      {(
+                        Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>
+                      ).map((day) => (
                         <FormControlLabel
                           key={day}
                           control={
@@ -1212,7 +1175,7 @@ export default function Home() {
             }}
             sx={{ textTransform: "none" }}
           >
-            Manage metrics →
+            Manage metrics
           </Button>
           <Stack direction="row" spacing={1}>
             <Button onClick={closeCreate} sx={{ textTransform: "none" }}>

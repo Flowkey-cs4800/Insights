@@ -93,7 +93,7 @@ export default function LogEntryDialog({
               <TextField
                 label={
                   selectedMetricType.kind === "Duration"
-                    ? "Duration (minutes)"
+                    ? "Duration (time)"
                     : `Value${
                         selectedMetricType.unit
                           ? ` (${selectedMetricType.unit})`

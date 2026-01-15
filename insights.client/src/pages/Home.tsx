@@ -67,6 +67,26 @@ function daysInMonth(d: Date) {
 
 const cadenceLabel = (c: GoalCadence) => (c === 0 ? "Daily" : "Weekly");
 
+// Helper functions for day bit flags
+// Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
+const DAY_FLAGS = {
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 4,
+  Thursday: 8,
+  Friday: 16,
+  Saturday: 32,
+  Sunday: 64,
+} as const;
+
+const isDaySelected = (goalDays: number, day: keyof typeof DAY_FLAGS) => {
+  return (goalDays & DAY_FLAGS[day]) !== 0;
+};
+
+const toggleDay = (goalDays: number, day: keyof typeof DAY_FLAGS) => {
+  return goalDays ^ DAY_FLAGS[day];
+};
+
 type LogDialogState = {
   open: boolean;
   metricType: MetricType | null;
@@ -82,6 +102,7 @@ type CreateState = {
   hasGoal: boolean;
   goalCadence: GoalCadence;
   goalValue: string;
+  goalDays: number; // Bit flags for selected days
 };
 
 export default function Home() {
@@ -116,6 +137,7 @@ export default function Home() {
     hasGoal: false,
     goalCadence: 1,
     goalValue: "5",
+    goalDays: 127, // All days selected by default
   });
 
   const upsertMetricInState = (metric: Metric) => {
@@ -452,9 +474,20 @@ export default function Home() {
       hasGoal: false,
       goalCadence: 1,
       goalValue: "5",
+      goalDays: 127,
     });
 
-  const closeCreate = () => setCreateState((s) => ({ ...s, open: false }));
+  const closeCreate = () =>
+    setCreateState({
+      open: false,
+      name: "",
+      kind: "Boolean",
+      unit: "",
+      hasGoal: false,
+      goalCadence: 1,
+      goalValue: "5",
+      goalDays: 127, // Reset to all days
+    });
 
   const submitCreate = async () => {
     setErr(null);
@@ -478,12 +511,21 @@ export default function Home() {
         gv = Math.min(7, gv);
     }
 
+    // Validate goal days for daily cadence
+    let goalDays = createState.goalDays;
+    if (createState.hasGoal && createState.goalCadence === 0) {
+      if (goalDays <= 0) {
+        return setErr("Please select at least one day for your daily goal.");
+      }
+    }
+
     const res = await createMetricType(
       name,
       createState.kind,
       unit,
       createState.goalCadence,
-      gv
+      gv,
+      goalDays
     );
 
     if (!res.success) return setErr(res.error);
@@ -1123,6 +1165,40 @@ export default function Home() {
                   fullWidth
                   inputMode="numeric"
                 />
+
+                {/* Day selection for daily goals */}
+                {createState.goalCadence === 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                      Active on these days:
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {(Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>).map((day) => (
+                        <FormControlLabel
+                          key={day}
+                          control={
+                            <Checkbox
+                              checked={isDaySelected(createState.goalDays, day)}
+                              onChange={() =>
+                                setCreateState((s) => ({
+                                  ...s,
+                                  goalDays: toggleDay(s.goalDays, day),
+                                }))
+                              }
+                              size="small"
+                            />
+                          }
+                          label={
+                            <Typography variant="body2">
+                              {day.slice(0, 3)}
+                            </Typography>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
               </>
             )}
           </Stack>

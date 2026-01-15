@@ -14,7 +14,8 @@ public static class MetricRoutes
         MetricKind Kind,
         string? Unit,
         GoalCadence GoalCadence,
-        int GoalValue
+        int GoalValue,
+        int GoalDays
     );
 
     public record MetricTypeRequest(
@@ -22,12 +23,28 @@ public static class MetricRoutes
         MetricKind Kind,
         string? Unit,
         GoalCadence GoalCadence,
-        int GoalValue
+        int GoalValue,
+        int GoalDays
     );
 
     public record MetricResponse(Guid MetricId, Guid MetricTypeId, string MetricTypeName, DateOnly Date, int Value);
     public record MetricRequest(Guid MetricTypeId, DateOnly Date, int Value);
     public record MetricUpdateRequest(int Value);
+
+    // Analytics DTOs
+    public record BarDataPoint(string Label, int Value, bool IsGoalMet);
+    public record DayConsistency(string DayName, int Count, double Percentage);
+    public record MetricAnalyticsResponse(
+        string MetricName,
+        MetricKind Kind,
+        string? Unit,
+        int CurrentStreak,
+        int MaxStreak,
+        double Average,
+        List<DayConsistency> ConsistentDays,
+        List<BarDataPoint> WeeklyData,
+        List<BarDataPoint> MonthlyData
+    );
 
     public static void MapMetricRoutes(this WebApplication app)
     {
@@ -51,7 +68,8 @@ public static class MetricRoutes
                     mt.Kind,
                     mt.Unit,
                     mt.GoalCadence,
-                    mt.GoalValue
+                    mt.GoalValue,
+                    mt.GoalDays
                 ))
                 .ToListAsync();
 
@@ -76,6 +94,21 @@ public static class MetricRoutes
             if (request.Kind == MetricKind.Boolean && request.GoalCadence == GoalCadence.Daily)
                 goalValue = Math.Min(1, goalValue);
 
+            // Validate GoalDays for Daily cadence
+            var goalDays = request.GoalDays;
+            if (request.GoalCadence == GoalCadence.Daily)
+            {
+                // Ensure at least one day is selected
+                if (goalDays <= 0 || goalDays > 127)
+                    goalDays = 127; // Default to all days if invalid
+            }
+            else
+            {
+                // For Weekly cadence, GoalDays doesn't matter but keep it
+                if (goalDays <= 0 || goalDays > 127)
+                    goalDays = 127;
+            }
+
             var metricType = new MetricType
             {
                 MetricTypeId = Guid.NewGuid(),
@@ -84,7 +117,8 @@ public static class MetricRoutes
                 Kind = request.Kind,
                 Unit = request.Unit,
                 GoalCadence = request.GoalCadence,
-                GoalValue = goalValue
+                GoalValue = goalValue,
+                GoalDays = goalDays
             };
 
             db.MetricTypes.Add(metricType);
@@ -97,7 +131,8 @@ public static class MetricRoutes
                     metricType.Kind,
                     metricType.Unit,
                     metricType.GoalCadence,
-                    metricType.GoalValue
+                    metricType.GoalValue,
+                    metricType.GoalDays
                 ));
         })
         .Produces<MetricTypeResponse>(201)
@@ -122,11 +157,27 @@ public static class MetricRoutes
             if (request.Kind == MetricKind.Boolean && request.GoalCadence == GoalCadence.Daily)
                 goalValue = Math.Min(1, goalValue);
 
+            // Validate GoalDays for Daily cadence
+            var goalDays = request.GoalDays;
+            if (request.GoalCadence == GoalCadence.Daily)
+            {
+                // Ensure at least one day is selected
+                if (goalDays <= 0 || goalDays > 127)
+                    goalDays = 127; // Default to all days if invalid
+            }
+            else
+            {
+                // For Weekly cadence, GoalDays doesn't matter but keep it
+                if (goalDays <= 0 || goalDays > 127)
+                    goalDays = 127;
+            }
+
             metricType.Name = request.Name;
             metricType.Kind = request.Kind;
             metricType.Unit = request.Unit;
             metricType.GoalCadence = request.GoalCadence;
             metricType.GoalValue = goalValue;
+            metricType.GoalDays = goalDays;
 
             await db.SaveChangesAsync();
 
@@ -136,7 +187,8 @@ public static class MetricRoutes
                 metricType.Kind,
                 metricType.Unit,
                 metricType.GoalCadence,
-                metricType.GoalValue
+                metricType.GoalValue,
+                metricType.GoalDays
             ));
         })
         .Produces<MetricTypeResponse>(200)
@@ -320,6 +372,70 @@ public static class MetricRoutes
         .Produces<CompareResponse>(200)
         .Produces(400)
         .Produces(401);
+
+        // --- Get analytics for a single metric ---
+        metrics.MapGet("/analytics/{metricTypeId:guid}", async (Guid metricTypeId, HttpContext context, InsightsContext db) =>
+        {
+            var userId = GetUserId(context);
+            if (userId is null) return Results.Unauthorized();
+
+            var metricType = await db.MetricTypes
+                .FirstOrDefaultAsync(mt => mt.MetricTypeId == metricTypeId && mt.UserId == userId);
+
+            if (metricType is null) return Results.NotFound();
+
+            // Get all metrics for this type (last 90 days for performance)
+            var ninetyDaysAgo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-90));
+            var metrics = await db.Metrics
+                .Where(m => m.MetricTypeId == metricTypeId && m.UserId == userId && m.Date >= ninetyDaysAgo)
+                .OrderBy(m => m.Date)
+                .ToListAsync();
+
+            if (metrics.Count == 0)
+            {
+                return Results.Ok(new MetricAnalyticsResponse(
+                    metricType.Name,
+                    metricType.Kind,
+                    metricType.Unit,
+                    0, 0, 0,
+                    new List<DayConsistency>(),
+                    new List<BarDataPoint>(),
+                    new List<BarDataPoint>()
+                ));
+            }
+
+            // Calculate streaks
+            var (currentStreak, maxStreak) = CalculateStreaks(metrics, metricType);
+
+            // Calculate average
+            var average = metrics.Average(m => (double)m.Value);
+
+            // Calculate most consistent days
+            var consistentDays = CalculateConsistentDays(metrics);
+
+            // Generate weekly bar data (last 7 days)
+            var weeklyData = GenerateWeeklyBarData(metrics, metricType);
+
+            // Generate monthly bar data (last 30 days)
+            var monthlyData = GenerateMonthlyBarData(metrics, metricType);
+
+            return Results.Ok(new MetricAnalyticsResponse(
+                metricType.Name,
+                metricType.Kind,
+                metricType.Unit,
+                currentStreak,
+                maxStreak,
+                average,
+                consistentDays,
+                weeklyData,
+                monthlyData
+            ));
+        })
+        .WithSummary("Get analytics for a metric")
+        .WithDescription("Returns streak stats, consistency, and bar graph data for weekly/monthly views.")
+        .Produces<MetricAnalyticsResponse>(200)
+        .Produces(401)
+        .Produces(404);
 
         // --- Get top insights ---
         metrics.MapGet("/insights", async (HttpContext context, InsightsContext db) =>
@@ -747,5 +863,193 @@ public static class MetricRoutes
         if (denominator == 0) return null;
 
         return numerator / denominator;
+    }
+
+    // Analytics helper methods
+    private static (int CurrentStreak, int MaxStreak) CalculateStreaks(List<Metric> metrics, MetricType metricType)
+    {
+        if (metrics.Count == 0) return (0, 0);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var hasGoal = metricType.GoalValue > 0;
+        var isDaily = metricType.GoalCadence == GoalCadence.Daily;
+        
+        // For metrics, create a set of dates that have entries
+        var metricDates = new HashSet<DateOnly>(metrics.Select(m => m.Date));
+        
+        // Helper to check if a day counts towards streak
+        bool CountsForStreak(DateOnly date)
+        {
+            // If daily goal, only count if the day is in GoalDays
+            if (hasGoal && isDaily)
+            {
+                var dayOfWeek = date.DayOfWeek;
+                if (!metricType.IsDayEnabled(dayOfWeek))
+                    return false; // This day doesn't count for goal
+            }
+
+            if (!metricDates.Contains(date))
+                return false; // No entry on this date
+
+            var metric = metrics.First(m => m.Date == date);
+            
+            // Boolean: value must be 1
+            if (metricType.Kind == MetricKind.Boolean)
+                return metric.Value == 1;
+            
+            // Numeric/Duration: if has daily goal, must meet/exceed goal
+            if (hasGoal && isDaily)
+                return metric.Value >= metricType.GoalValue;
+            
+            // Otherwise, just needs to be > 0
+            return metric.Value > 0;
+        }
+
+        // Calculate current streak (going backwards from today)
+        int currentStreak = 0;
+        var checkDate = today;
+        
+        // Start from today or yesterday if today has no entry
+        if (!CountsForStreak(today))
+            checkDate = today.AddDays(-1);
+        
+        while (checkDate >= metrics.Min(m => m.Date))
+        {
+            if (CountsForStreak(checkDate))
+            {
+                currentStreak++;
+                checkDate = checkDate.AddDays(-1);
+            }
+            else
+            {
+                // For daily goals, skip days not in GoalDays
+                if (hasGoal && isDaily && !metricType.IsDayEnabled(checkDate.DayOfWeek))
+                {
+                    checkDate = checkDate.AddDays(-1);
+                    continue;
+                }
+                break;
+            }
+        }
+
+        // Calculate max streak (scan entire history)
+        int maxStreak = 0;
+        int tempStreak = 0;
+        var scanDate = metrics.Min(m => m.Date);
+        var endDate = today;
+
+        while (scanDate <= endDate)
+        {
+            if (CountsForStreak(scanDate))
+            {
+                tempStreak++;
+                maxStreak = Math.Max(maxStreak, tempStreak);
+            }
+            else
+            {
+                // For daily goals, skip days not in GoalDays
+                if (hasGoal && isDaily && !metricType.IsDayEnabled(scanDate.DayOfWeek))
+                {
+                    scanDate = scanDate.AddDays(1);
+                    continue;
+                }
+                tempStreak = 0;
+            }
+            scanDate = scanDate.AddDays(1);
+        }
+
+        return (currentStreak, maxStreak);
+    }
+
+    private static List<DayConsistency> CalculateConsistentDays(List<Metric> metrics)
+    {
+        if (metrics.Count == 0) return new List<DayConsistency>();
+
+        var dayGroups = metrics
+            .GroupBy(m => m.Date.DayOfWeek)
+            .Select(g => new
+            {
+                Day = g.Key,
+                Count = g.Count()
+            })
+            .OrderByDescending(x => x.Count)
+            .ToList();
+
+        var total = metrics.Count;
+        var dayNames = new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
+
+        return dayGroups.Select(dg => new DayConsistency(
+            dayNames[(int)dg.Day],
+            dg.Count,
+            (dg.Count / (double)total) * 100
+        )).ToList();
+    }
+
+    private static List<BarDataPoint> GenerateWeeklyBarData(List<Metric> metrics, MetricType metricType)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var sevenDaysAgo = today.AddDays(-6); // Include today = 7 days total
+        
+        var metricDict = metrics.Where(m => m.Date >= sevenDaysAgo && m.Date <= today)
+            .ToDictionary(m => m.Date, m => m.Value);
+
+        var result = new List<BarDataPoint>();
+        var hasGoal = metricType.GoalValue > 0 && metricType.GoalCadence == GoalCadence.Daily;
+
+        for (var date = sevenDaysAgo; date <= today; date = date.AddDays(1))
+        {
+            var value = metricDict.TryGetValue(date, out var v) ? v : 0;
+            var isGoalMet = false;
+
+            if (hasGoal && metricDict.ContainsKey(date))
+            {
+                if (metricType.Kind == MetricKind.Boolean)
+                    isGoalMet = value == 1;
+                else
+                    isGoalMet = value >= metricType.GoalValue;
+            }
+
+            result.Add(new BarDataPoint(
+                date.ToString("ddd"), // Mon, Tue, etc.
+                value,
+                isGoalMet
+            ));
+        }
+
+        return result;
+    }
+
+    private static List<BarDataPoint> GenerateMonthlyBarData(List<Metric> metrics, MetricType metricType)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var thirtyDaysAgo = today.AddDays(-29); // Include today = 30 days total
+        
+        var metricDict = metrics.Where(m => m.Date >= thirtyDaysAgo && m.Date <= today)
+            .ToDictionary(m => m.Date, m => m.Value);
+
+        var result = new List<BarDataPoint>();
+        var hasGoal = metricType.GoalValue > 0 && metricType.GoalCadence == GoalCadence.Daily;
+
+        for (var date = thirtyDaysAgo; date <= today; date = date.AddDays(1))
+        {
+            var value = metricDict.TryGetValue(date, out var v) ? v : 0;
+            var isGoalMet = false;
+
+            if (hasGoal && metricDict.ContainsKey(date))
+            {
+                if (metricType.Kind == MetricKind.Boolean)
+                    isGoalMet = value == 1;
+                else
+                    isGoalMet = value >= metricType.GoalValue;
+            }
+
+            result.Add(new BarDataPoint(
+                date.Day.ToString(), // Day number (1-31)
+                value,
+                isGoalMet
+            ));
+        }
+
+        return result;
     }
 }

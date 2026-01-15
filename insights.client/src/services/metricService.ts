@@ -12,6 +12,7 @@ export interface MetricType {
 
   goalCadence: GoalCadence;
   goalValue: number;
+  goalDays: number; // Bit flags: Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
 }
 
 export interface Metric {
@@ -85,7 +86,8 @@ export const createMetricType = (
   kind: string,
   unit?: string,
   goalCadence: GoalCadence = 1,
-  goalValue: number = 0
+  goalValue: number = 0,
+  goalDays: number = 127
 ) =>
   callApi<MetricType>("/api/metric-types", "POST", {
     name,
@@ -93,6 +95,7 @@ export const createMetricType = (
     unit,
     goalCadence,
     goalValue,
+    goalDays,
   });
 
 export const updateMetricType = (
@@ -101,7 +104,8 @@ export const updateMetricType = (
   kind: string,
   unit?: string,
   goalCadence: GoalCadence = 1,
-  goalValue: number = 0
+  goalValue: number = 0,
+  goalDays: number = 127
 ) =>
   callApi<MetricType>(`/api/metric-types/${metricTypeId}`, "PUT", {
     name,
@@ -109,6 +113,7 @@ export const updateMetricType = (
     unit,
     goalCadence,
     goalValue,
+    goalDays,
   });
 
 export const deleteMetricType = (id: string) =>
@@ -145,3 +150,32 @@ export const compareMetrics = (metricTypeIdX: string, metricTypeIdY: string) =>
 // Get top insights (auto-discovered correlations)
 export const getInsights = () =>
   callApi<InsightsResponse>("/api/metrics/insights");
+
+// Analytics interfaces
+export interface BarDataPoint {
+  label: string;
+  value: number;
+  isGoalMet: boolean;
+}
+
+export interface DayConsistency {
+  dayName: string;
+  count: number;
+  percentage: number;
+}
+
+export interface MetricAnalyticsResponse {
+  metricName: string;
+  kind: "Duration" | "Number" | "Boolean";
+  unit: string | null;
+  currentStreak: number;
+  maxStreak: number;
+  average: number;
+  consistentDays: DayConsistency[];
+  weeklyData: BarDataPoint[];
+  monthlyData: BarDataPoint[];
+}
+
+// Get analytics for a single metric
+export const getMetricAnalytics = (metricTypeId: string) =>
+  callApi<MetricAnalyticsResponse>(`/api/metrics/analytics/${metricTypeId}`);

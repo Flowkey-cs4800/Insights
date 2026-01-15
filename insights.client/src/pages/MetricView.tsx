@@ -50,6 +50,26 @@ import {
 
 const cadenceLabel = (c: GoalCadence) => (c === 0 ? "Daily" : "Weekly");
 
+// Helper functions for day bit flags
+// Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64
+const DAY_FLAGS = {
+  Monday: 1,
+  Tuesday: 2,
+  Wednesday: 4,
+  Thursday: 8,
+  Friday: 16,
+  Saturday: 32,
+  Sunday: 64,
+} as const;
+
+const isDaySelected = (goalDays: number, day: keyof typeof DAY_FLAGS) => {
+  return (goalDays & DAY_FLAGS[day]) !== 0;
+};
+
+const toggleDay = (goalDays: number, day: keyof typeof DAY_FLAGS) => {
+  return goalDays ^ DAY_FLAGS[day];
+};
+
 function isoDate(d: Date) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -74,6 +94,7 @@ type CreateState = {
   hasGoal: boolean;
   goalCadence: GoalCadence;
   goalValue: string;
+  goalDays: number;
 };
 
 type EditState = {
@@ -85,6 +106,7 @@ type EditState = {
   hasGoal: boolean;
   goalCadence: GoalCadence;
   goalValue: string;
+  goalDays: number;
 };
 
 export default function MetricView() {
@@ -129,6 +151,7 @@ export default function MetricView() {
     hasGoal: false,
     goalCadence: 1,
     goalValue: "5",
+    goalDays: 127,
   });
 
   const [editState, setEditState] = useState<EditState>({
@@ -140,6 +163,7 @@ export default function MetricView() {
     hasGoal: false,
     goalCadence: 1,
     goalValue: "5",
+    goalDays: 127,
   });
 
   const initialLoad = async () => {
@@ -307,9 +331,20 @@ export default function MetricView() {
       hasGoal: false,
       goalCadence: 1,
       goalValue: "5",
+      goalDays: 127, // All days selected by default
     });
 
-  const closeCreate = () => setCreateState((s) => ({ ...s, open: false }));
+  const closeCreate = () =>
+    setCreateState({
+      open: false,
+      name: "",
+      kind: "Boolean",
+      unit: "",
+      hasGoal: false,
+      goalCadence: 1,
+      goalValue: "5",
+      goalDays: 127,
+    });
 
   const submitCreate = async () => {
     setErr(null);
@@ -333,12 +368,21 @@ export default function MetricView() {
         gv = Math.min(7, gv);
     }
 
+    // Validate goal days for daily cadence
+    let goalDays = createState.goalDays;
+    if (createState.hasGoal && createState.goalCadence === 0) {
+      if (goalDays <= 0) {
+        return setErr("Please select at least one day for your daily goal.");
+      }
+    }
+
     const res = await createMetricType(
       name,
       createState.kind,
       unit,
       createState.goalCadence,
-      gv
+      gv,
+      goalDays
     );
 
     if (!res.success) return setErr(res.error);
@@ -360,6 +404,7 @@ export default function MetricView() {
       hasGoal: (mt.goalValue ?? 0) > 0,
       goalCadence: mt.goalCadence ?? 1,
       goalValue: String(mt.goalValue ?? 0) || "5",
+      goalDays: mt.goalDays ?? 127,
     });
   };
 
@@ -373,6 +418,7 @@ export default function MetricView() {
       hasGoal: false,
       goalCadence: 1,
       goalValue: "5",
+      goalDays: 127,
     });
 
   const submitEdit = async () => {
@@ -405,6 +451,15 @@ export default function MetricView() {
         gv = Math.min(7, gv);
     }
 
+    // Validate goal days for daily cadence
+    let goalDays = editState.goalDays;
+    if (editState.hasGoal && editState.goalCadence === 0) {
+      if (goalDays <= 0) {
+        setBusy(mt.metricTypeId, false);
+        return setErr("Please select at least one day for your daily goal.");
+      }
+    }
+
     const snapshot = mt;
     const optimistic: MetricType = {
       ...mt,
@@ -413,6 +468,7 @@ export default function MetricView() {
       unit: unit ?? null,
       goalCadence: editState.goalCadence,
       goalValue: gv,
+      goalDays,
     };
     upsertType(optimistic);
 
@@ -423,7 +479,8 @@ export default function MetricView() {
         editState.kind,
         unit,
         editState.goalCadence,
-        gv
+        gv,
+        goalDays
       );
 
       if (!res.success) {
@@ -953,6 +1010,40 @@ export default function MetricView() {
                       : "Set a numeric target for the selected cadence."
                   }
                 />
+
+                {/* Day selection for daily goals */}
+                {createState.goalCadence === 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                      Active on these days:
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {(Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>).map((day) => (
+                        <FormControlLabel
+                          key={day}
+                          control={
+                            <Checkbox
+                              checked={isDaySelected(createState.goalDays, day)}
+                              onChange={() =>
+                                setCreateState((s) => ({
+                                  ...s,
+                                  goalDays: toggleDay(s.goalDays, day),
+                                }))
+                              }
+                              size="small"
+                            />
+                          }
+                          label={
+                            <Typography variant="body2">
+                              {day.slice(0, 3)}
+                            </Typography>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
               </>
             )}
           </Stack>
@@ -1066,6 +1157,40 @@ export default function MetricView() {
                       : "Numeric target for the selected cadence."
                   }
                 />
+
+                {/* Day selection for daily goals */}
+                {editState.goalCadence === 0 && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                      Active on these days:
+                    </Typography>
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                      {(Object.keys(DAY_FLAGS) as Array<keyof typeof DAY_FLAGS>).map((day) => (
+                        <FormControlLabel
+                          key={day}
+                          control={
+                            <Checkbox
+                              checked={isDaySelected(editState.goalDays, day)}
+                              onChange={() =>
+                                setEditState((s) => ({
+                                  ...s,
+                                  goalDays: toggleDay(s.goalDays, day),
+                                }))
+                              }
+                              size="small"
+                            />
+                          }
+                          label={
+                            <Typography variant="body2">
+                              {day.slice(0, 3)}
+                            </Typography>
+                          }
+                          sx={{ m: 0 }}
+                        />
+                      ))}
+                    </Box>
+                  </Box>
+                )}
               </>
             )}
           </Stack>

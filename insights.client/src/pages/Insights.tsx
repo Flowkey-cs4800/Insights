@@ -14,6 +14,8 @@ import {
   CircularProgress,
   useTheme as useMuiTheme,
   useMediaQuery,
+  ToggleButtonGroup,
+  ToggleButton,
   Tab,
   Tabs,
 } from "@mui/material";
@@ -42,9 +44,11 @@ import {
   getInsights,
   getMetricTypes,
   compareMetrics,
+  getMetricAnalytics,
   type InsightItem,
   type MetricType,
   type CompareResult,
+  type MetricAnalyticsResponse,
 } from "../services/metricService";
 
 // Custom styled tooltip for charts
@@ -56,7 +60,7 @@ interface TooltipPayloadEntry {
 
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: TooltipPayloadEntry[];
+  payload?: readonly TooltipPayloadEntry[];
   label?: string | number;
   isDark?: boolean;
   valueFormatter?: (value: number, name: string) => string;
@@ -125,7 +129,7 @@ export default function Insights() {
   };
 
   // Tab state
-  const [tab, setTab] = useState<"auto" | "compare">("auto");
+  const [tab, setTab] = useState<"insights" | "compare">("insights");
 
   // Auto insights state
   const [insights, setInsights] = useState<InsightItem[]>([]);
@@ -143,6 +147,12 @@ export default function Insights() {
     null
   );
   const [comparing, setComparing] = useState(false);
+
+  // Individual analytics state
+  const [selectedMetricId, setSelectedMetricId] = useState<string>("");
+  const [analyticsData, setAnalyticsData] = useState<MetricAnalyticsResponse | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [analyticsView, setAnalyticsView] = useState<"weekly" | "monthly">("weekly");
 
   useEffect(() => {
     const load = async () => {
@@ -193,6 +203,28 @@ export default function Insights() {
 
     void doCompare();
   }, [xMetric, yMetric]);
+
+  // Auto-fetch analytics when metric selected
+  useEffect(() => {
+    if (!selectedMetricId) {
+      setAnalyticsData(null);
+      return;
+    }
+
+    const fetchAnalytics = async () => {
+      setLoadingAnalytics(true);
+      const res = await getMetricAnalytics(selectedMetricId);
+      if (res.success) {
+        setAnalyticsData(res.data);
+      } else {
+        setErr(res.error);
+        setAnalyticsData(null);
+      }
+      setLoadingAnalytics(false);
+    };
+
+    void fetchAnalytics();
+  }, [selectedMetricId]);
 
   const getInsightIcon = (insight: InsightItem) => {
     switch (insight.insightType) {
@@ -765,9 +797,9 @@ export default function Insights() {
           }}
         >
           <Tab
-            label={isMobile ? "Auto" : "Auto Insights"}
-            value="auto"
-            icon={<TrendingUpIcon sx={{ fontSize: 20 }} />}
+            label={isMobile ? "Analytics" : "Metric Analytics"}
+            value="insights"
+            icon={<ShowChartIcon sx={{ fontSize: 20 }} />}
             iconPosition="start"
             sx={{ textTransform: "none", fontWeight: 700 }}
           />
@@ -781,217 +813,360 @@ export default function Insights() {
         </Tabs>
       </Stack>
 
-      {tab === "auto" ? (
-        // Auto Insights Tab
-        <>
-          {loading ? (
-            <Box sx={{ textAlign: "center", py: 8 }}>
-              <CircularProgress />
-            </Box>
-          ) : insights.length === 0 ? (
-            <Paper
-              variant="outlined"
-              sx={{ p: 4, borderRadius: 3, textAlign: "center" }}
-            >
-              <ShowChartIcon
-                sx={{ fontSize: 48, color: "text.disabled", mb: 2 }}
-              />
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                No insights yet
-              </Typography>
-              <Typography color="text.secondary">
-                Log more data to discover patterns and correlations.
-              </Typography>
-            </Paper>
-          ) : (
-            <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
-              {/* Insights List */}
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  borderRadius: 3,
-                  width: { xs: "100%", md: 320 },
-                  flexShrink: 0,
-                }}
-              >
-                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
-                  All Insights ({insights.length})
-                </Typography>
-                <Stack spacing={1}>
-                  {insights.map((insight, idx) => (
-                    <Paper
-                      key={idx}
-                      variant="outlined"
-                      onClick={() => setSelectedInsight(insight)}
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 2,
-                        cursor: "pointer",
-                        borderColor:
-                          selectedInsight === insight
-                            ? "primary.main"
-                            : "divider",
-                        borderWidth: selectedInsight === insight ? 2 : 1,
-                        bgcolor:
-                          selectedInsight === insight
-                            ? "action.selected"
-                            : "transparent",
-                        "&:hover": {
-                          bgcolor: "action.hover",
-                        },
-                      }}
-                    >
-                      <Stack
-                        direction="row"
-                        spacing={1.5}
-                        alignItems="flex-start"
-                      >
-                        <Box
-                          sx={{
-                            width: 36,
-                            height: 36,
-                            borderRadius: 1.5,
-                            display: "grid",
-                            placeItems: "center",
-                            bgcolor: getInsightColor(insight),
-                            color: "white",
-                            flexShrink: 0,
-                          }}
-                        >
-                          {getInsightIcon(insight)}
-                        </Box>
-                        <Box sx={{ minWidth: 0 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 700,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              display: "-webkit-box",
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: "vertical",
-                            }}
-                          >
-                            {insight.insightType === "correlation"
-                              ? `${insight.metricX} ↔ ${insight.metricY}`
-                              : insight.metricX}
-                          </Typography>
-                          <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                            <Chip
-                              size="small"
-                              label={insight.insightType}
-                              sx={{ height: 20, fontSize: 10 }}
-                            />
-                            {insight.comparisonData && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {insight.comparisonData.percentDiff > 0
-                                  ? "+"
-                                  : ""}
-                                {insight.comparisonData.percentDiff.toFixed(0)}%
-                              </Typography>
-                            )}
-                          </Stack>
-                        </Box>
-                      </Stack>
-                    </Paper>
-                  ))}
-                </Stack>
-              </Paper>
+      {tab === "insights" ? (
+        // Metric Analytics Tab - Combined Metric List + Individual Analytics
+        <Stack direction={{ xs: "column", md: "row" }} spacing={3} sx={{ height: { md: "calc(100vh - 250px)" } }}>
+          {/* Left: Metric List */}
+          <Paper
+            variant="outlined"
+            sx={{
+              width: { xs: "100%", md: 320 },
+              p: 2,
+              borderRadius: 3,
+              bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+              overflowY: "auto",
+              maxHeight: { xs: 400, md: "100%" },
+              flexShrink: 0,
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 2 }}>
+              Your Metrics ({metricTypes.length})
+            </Typography>
 
-              {/* Visualization Panel */}
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: { xs: 2, sm: 3 },
-                  borderRadius: 3,
-                  flexGrow: 1,
-                  minWidth: 0,
-                  bgcolor: isDark
-                    ? "rgba(255,255,255,0.02)"
-                    : "rgba(0,0,0,0.01)",
-                }}
-              >
-                {selectedInsight ? (
-                  <>
-                    <Stack
-                      direction={{ xs: "column", sm: "row" }}
-                      spacing={{ xs: 1.5, sm: 2 }}
-                      alignItems={{ xs: "flex-start", sm: "center" }}
-                      sx={{ mb: { xs: 2, sm: 3 } }}
-                    >
+            {loading ? (
+              <Box sx={{ textAlign: "center", py: 4 }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : metricTypes.length === 0 ? (
+              <Box sx={{ textAlign: "center", py: 4, color: "text.secondary" }}>
+                <ShowChartIcon sx={{ fontSize: 48, opacity: 0.3, mb: 2 }} />
+                <Typography variant="body2">
+                  No metrics available yet
+                </Typography>
+                <Typography variant="caption">
+                  Create metrics to view analytics
+                </Typography>
+              </Box>
+            ) : (
+              <Stack spacing={1}>
+                {metricTypes.map((metric) => (
+                  <Paper
+                    key={metric.metricTypeId}
+                    variant="outlined"
+                    onClick={() => setSelectedMetricId(metric.metricTypeId)}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      cursor: "pointer",
+                      borderColor:
+                        selectedMetricId === metric.metricTypeId
+                          ? "primary.main"
+                          : "divider",
+                      borderWidth: selectedMetricId === metric.metricTypeId ? 2 : 1,
+                      bgcolor:
+                        selectedMetricId === metric.metricTypeId
+                          ? "action.selected"
+                          : "transparent",
+                      "&:hover": {
+                        bgcolor: "action.hover",
+                      },
+                    }}
+                  >
+                    <Stack direction="row" spacing={1.5} alignItems="flex-start">
                       <Box
                         sx={{
-                          width: { xs: 40, sm: 48 },
-                          height: { xs: 40, sm: 48 },
-                          borderRadius: 2,
-                          display: { xs: "none", sm: "grid" },
+                          width: 36,
+                          height: 36,
+                          borderRadius: 1.5,
+                          display: "grid",
                           placeItems: "center",
-                          bgcolor: getInsightColor(selectedInsight),
+                          bgcolor: "primary.main",
                           color: "white",
+                          flexShrink: 0,
                         }}
                       >
-                        {getInsightIcon(selectedInsight)}
+                        <ShowChartIcon />
                       </Box>
-                      <Box sx={{ minWidth: 0, width: "100%" }}>
-                        <Stack
-                          direction="row"
-                          spacing={1}
-                          alignItems="center"
-                          sx={{ mb: 0.5 }}
-                        >
-                          <Box
-                            sx={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 1,
-                              display: { xs: "grid", sm: "none" },
-                              placeItems: "center",
-                              bgcolor: getInsightColor(selectedInsight),
-                              color: "white",
-                              flexShrink: 0,
-                            }}
-                          >
-                            {getInsightIcon(selectedInsight)}
-                          </Box>
-                          <Typography
-                            variant={isMobile ? "body1" : "h6"}
-                            sx={{
-                              fontWeight: 800,
-                              lineHeight: 1.3,
-                            }}
-                          >
-                            {selectedInsight.insightType === "correlation"
-                              ? `${selectedInsight.metricX} ↔ ${selectedInsight.metricY}`
-                              : selectedInsight.metricX}
-                          </Typography>
-                        </Stack>
+                      <Box sx={{ minWidth: 0 }}>
                         <Typography
-                          variant={isMobile ? "caption" : "body2"}
-                          color="text.secondary"
-                          sx={{ lineHeight: 1.4 }}
+                          variant="body2"
+                          sx={{
+                            fontWeight: 700,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                          }}
                         >
-                          {selectedInsight.summary}
+                          {metric.name}
                         </Typography>
+                        <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                          <Chip
+                            size="small"
+                            label={metric.kind}
+                            sx={{ height: 20, fontSize: 10 }}
+                          />
+                          {metric.unit && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {metric.unit}
+                            </Typography>
+                          )}
+                        </Stack>
                       </Box>
                     </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            )}
+          </Paper>
 
-                    {renderVisualization(selectedInsight)}
-                  </>
-                ) : (
-                  <Box sx={{ textAlign: "center", py: 8 }}>
-                    <Typography color="text.secondary">
-                      Select an insight to view details
+          {/* Right: Individual Analytics */}
+          <Paper
+            variant="outlined"
+            sx={{
+              flex: 1,
+              p: { xs: 2, sm: 3 },
+              borderRadius: 3,
+              bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+              overflowY: "auto",
+              minWidth: 0,
+            }}
+          >
+            {!selectedMetricId ? (
+              <Box sx={{ textAlign: "center", py: 8 }}>
+                <ShowChartIcon
+                  sx={{ fontSize: 64, opacity: 0.3, mb: 2 }}
+                />
+                <Typography color="text.secondary">
+                  Select a metric to view analytics
+                </Typography>
+              </Box>
+            ) : loadingAnalytics ? (
+              <Box sx={{ textAlign: "center", py: 6 }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : !analyticsData ? (
+              <Box sx={{ textAlign: "center", py: 6 }}>
+                <Typography color="text.secondary">
+                  No analytics data available for this metric
+                </Typography>
+              </Box>
+            ) : (
+              <Box>
+                {/* Header with weekly/monthly toggle */}
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  justifyContent="space-between"
+                  alignItems={{ xs: "flex-start", sm: "center" }}
+                  spacing={2}
+                  sx={{ mb: 3 }}
+                >
+                  <Typography variant={isMobile ? "body1" : "h6"} sx={{ fontWeight: 800 }}>
+                    {analyticsData.metricName}
+                  </Typography>
+                  <ToggleButtonGroup
+                    value={analyticsView}
+                    exclusive
+                    onChange={(_, value) => value && setAnalyticsView(value)}
+                    size="small"
+                  >
+                    <ToggleButton value="weekly">Weekly</ToggleButton>
+                    <ToggleButton value="monthly">Monthly</ToggleButton>
+                  </ToggleButtonGroup>
+                </Stack>
+
+                {/* Stats cards */}
+                <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                      flex: 1,
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                      <WhatshotIcon sx={{ fontSize: 20, color: "warning.main" }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Current Streak
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                      {analyticsData.currentStreak}
                     </Typography>
-                  </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      days
+                    </Typography>
+                  </Paper>
+
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                      flex: 1,
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                      <TrendingUpIcon sx={{ fontSize: 20, color: "success.main" }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Max Streak
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                      {analyticsData.maxStreak}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      days
+                    </Typography>
+                  </Paper>
+
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                      flex: 1,
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                      <ShowChartIcon sx={{ fontSize: 20, color: "primary.main" }} />
+                      <Typography variant="caption" color="text.secondary">
+                        Average
+                      </Typography>
+                    </Stack>
+                    <Typography variant="h4" sx={{ fontWeight: 900 }}>
+                      {analyticsData.average.toFixed(1)}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {analyticsData.unit || "value"}
+                    </Typography>
+                  </Paper>
+                </Stack>
+
+                {/* Bar chart */}
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    mb: 3,
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>
+                    {analyticsView === "weekly" ? "Last 7 Days" : "Last 30 Days"}
+                  </Typography>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart
+                      data={analyticsView === "weekly" ? analyticsData.weeklyData : analyticsData.monthlyData}
+                      margin={{ top: 20, right: 20, left: 0, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fill: chartColors.text, fontSize: 12 }}
+                        stroke={chartColors.grid}
+                      />
+                      <YAxis
+                        tick={{ fill: chartColors.text, fontSize: 12 }}
+                        stroke={chartColors.grid}
+                      />
+                      <Tooltip
+                        content={(props) => (
+                          <ChartTooltip
+                            {...props}
+                            isDark={isDark}
+                            valueFormatter={(value) => `${value} ${analyticsData.unit || ""}`}
+                          />
+                        )}
+                      />
+                      {/* Average reference line */}
+                      <ReferenceLine
+                        y={analyticsData.average}
+                        stroke={chartColors.primary}
+                        strokeDasharray="5 5"
+                        strokeWidth={2}
+                        label={{
+                          value: `Avg: ${analyticsData.average.toFixed(1)}`,
+                          fill: chartColors.primary,
+                          fontSize: 12,
+                          position: "insideTopRight",
+                        }}
+                      />
+                      <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                        {(analyticsView === "weekly" ? analyticsData.weeklyData : analyticsData.monthlyData).map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            fill={entry.isGoalMet ? theme.palette.success.main : chartColors.primary}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Paper>
+
+                {/* Most consistent days */}
+                {analyticsData.consistentDays.length > 0 && (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700 }}>
+                      Most Consistent Days
+                    </Typography>
+                    <Stack spacing={1}>
+                      {analyticsData.consistentDays.slice(0, 3).map((day) => (
+                        <Box key={day.dayName}>
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            sx={{ mb: 0.5 }}
+                          >
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {day.dayName}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary">
+                              {day.count} entries ({day.percentage.toFixed(0)}%)
+                            </Typography>
+                          </Stack>
+                          <Box
+                            sx={{
+                              height: 6,
+                              borderRadius: 3,
+                              bgcolor: isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                height: "100%",
+                                width: `${day.percentage}%`,
+                                bgcolor: "primary.main",
+                                borderRadius: 3,
+                              }}
+                            />
+                          </Box>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Paper>
                 )}
-              </Paper>
-            </Stack>
-          )}
-        </>
+              </Box>
+            )}
+          </Paper>
+        </Stack>
       ) : (
         // Custom Compare Tab
         <Paper

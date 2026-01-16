@@ -12,6 +12,8 @@ import {
   Skeleton,
   Snackbar,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
   useTheme as useMuiTheme,
@@ -120,8 +122,8 @@ function ChartTooltip({
   );
 }
 
-const INSIGHTS_PER_PAGE = 5;
-const METRICS_PER_PAGE = 5;
+const INSIGHTS_PER_PAGE = 6;
+const METRICS_PER_PAGE = 6;
 
 export default function Insights() {
   const navigate = useNavigate();
@@ -147,6 +149,9 @@ export default function Insights() {
 
   const [metricsPage, setMetricsPage] = useState(0);
   const [insightsPage, setInsightsPage] = useState(0);
+  const [activeTab, setActiveTab] = useState<"insights" | "metrics">(
+    "insights"
+  );
 
   const [xMetric, setXMetric] = useState<string>("");
   const [yMetric, setYMetric] = useState<string>("");
@@ -345,8 +350,303 @@ export default function Insights() {
 
   // Render insight visualization (for correlation insights)
   const renderInsightVisualization = (insight: InsightItem) => {
+    // Single-metric insights (streak, consistency)
+    if (insight.insightType === "streak" && insight.streakData) {
+      const { currentStreak, maxStreak, streakStartDate, daysUntilRecord } =
+        insight.streakData;
+      const isRecord = currentStreak >= maxStreak;
+
+      return (
+        <Stack spacing={3}>
+          {/* Title */}
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+              {isRecord
+                ? `ðŸ”¥ New record! ${currentStreak} day streak`
+                : `${currentStreak} day streak on ${insight.metricX}`}
+            </Typography>
+            {insight.detailedExplanation && (
+              <Typography variant="body2" color="text.secondary">
+                {insight.detailedExplanation}
+              </Typography>
+            )}
+          </Box>
+
+          {/* Streak visualization */}
+          <Box>
+            <Stack spacing={2}>
+              <Box>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  sx={{ mb: 0.5 }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Current streak
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {currentStreak} days
+                  </Typography>
+                </Stack>
+                <Box
+                  sx={{
+                    height: 28,
+                    bgcolor: isDark
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(0,0,0,0.08)",
+                    borderRadius: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      height: "100%",
+                      width: `${Math.min(
+                        100,
+                        (currentStreak / Math.max(maxStreak, 1)) * 100
+                      )}%`,
+                      bgcolor: "warning.main",
+                      borderRadius: 1,
+                      minWidth: currentStreak > 0 ? 4 : 0,
+                    }}
+                  />
+                </Box>
+              </Box>
+
+              <Box>
+                <Stack
+                  direction="row"
+                  justifyContent="space-between"
+                  sx={{ mb: 0.5 }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Personal best
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {maxStreak} days
+                  </Typography>
+                </Stack>
+                <Box
+                  sx={{
+                    height: 28,
+                    bgcolor: isDark
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(0,0,0,0.08)",
+                    borderRadius: 1,
+                    overflow: "hidden",
+                  }}
+                >
+                  <Box
+                    sx={{
+                      height: "100%",
+                      width: "100%",
+                      bgcolor: chartColors.secondary,
+                      borderRadius: 1,
+                    }}
+                  />
+                </Box>
+              </Box>
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          {/* Stats */}
+          <Stack direction="row" spacing={2}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: isMobile ? 1.25 : 1.5,
+                borderRadius: 2,
+                flex: 1,
+                textAlign: "center",
+                bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+              }}
+            >
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 500 }}
+              >
+                Started
+              </Typography>
+              <Typography
+                variant={isMobile ? "body1" : "h6"}
+                sx={{ fontWeight: 600 }}
+              >
+                {streakStartDate
+                  ? new Date(streakStartDate).toLocaleDateString(undefined, {
+                      month: "short",
+                      day: "numeric",
+                    })
+                  : "â€”"}
+              </Typography>
+            </Paper>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: isMobile ? 1.25 : 1.5,
+                borderRadius: 2,
+                flex: 1,
+                textAlign: "center",
+                bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+              }}
+            >
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 500 }}
+              >
+                {isRecord ? "Status" : "To beat record"}
+              </Typography>
+              <Typography
+                variant={isMobile ? "body1" : "h6"}
+                sx={{ fontWeight: 600 }}
+              >
+                {isRecord ? "ðŸ† Record!" : `${daysUntilRecord} days`}
+              </Typography>
+            </Paper>
+          </Stack>
+        </Stack>
+      );
+    }
+
+    if (insight.insightType === "consistency" && insight.consistencyData) {
+      const {
+        daysLogged,
+        totalDays,
+        percentage,
+        loggedDays,
+        previousWeekCount,
+      } = insight.consistencyData;
+
+      return (
+        <Stack spacing={3}>
+          {/* Title */}
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
+              {percentage >= 80
+                ? `Great consistency on ${insight.metricX}!`
+                : `${daysLogged}/${totalDays} days this week`}
+            </Typography>
+            {insight.detailedExplanation && (
+              <Typography variant="body2" color="text.secondary">
+                {insight.detailedExplanation}
+              </Typography>
+            )}
+          </Box>
+
+          {/* Week visualization */}
+          <Box>
+            <Typography
+              variant="subtitle2"
+              color="text.secondary"
+              sx={{ fontWeight: 600, mb: 1.5 }}
+            >
+              This Week
+            </Typography>
+            <Stack direction="row" spacing={1} justifyContent="space-between">
+              {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => {
+                const isLogged = loggedDays.includes(day);
+                return (
+                  <Box
+                    key={day}
+                    sx={{
+                      flex: 1,
+                      textAlign: "center",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        width: "100%",
+                        aspectRatio: "1",
+                        borderRadius: 1,
+                        bgcolor: isLogged
+                          ? "success.main"
+                          : isDark
+                          ? "rgba(255,255,255,0.1)"
+                          : "rgba(0,0,0,0.08)",
+                        mb: 0.5,
+                      }}
+                    />
+                    <Typography
+                      variant="caption"
+                      color={isLogged ? "success.main" : "text.disabled"}
+                      sx={{ fontWeight: isLogged ? 600 : 400 }}
+                    >
+                      {day}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          {/* Stats */}
+          <Stack direction="row" spacing={2}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: isMobile ? 1.25 : 1.5,
+                borderRadius: 2,
+                flex: 1,
+                textAlign: "center",
+                bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+              }}
+            >
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 500 }}
+              >
+                Consistency
+              </Typography>
+              <Typography
+                variant={isMobile ? "body1" : "h6"}
+                sx={{ fontWeight: 600 }}
+              >
+                {percentage.toFixed(0)}%
+              </Typography>
+            </Paper>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: isMobile ? 1.25 : 1.5,
+                borderRadius: 2,
+                flex: 1,
+                textAlign: "center",
+                bgcolor: isDark ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.01)",
+              }}
+            >
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 500 }}
+              >
+                vs Last Week
+              </Typography>
+              <Typography
+                variant={isMobile ? "body1" : "h6"}
+                sx={{ fontWeight: 600 }}
+              >
+                {previousWeekCount !== null
+                  ? daysLogged > previousWeekCount
+                    ? `+${daysLogged - previousWeekCount}`
+                    : daysLogged < previousWeekCount
+                    ? `${daysLogged - previousWeekCount}`
+                    : "Same"
+                  : "â€”"}
+              </Typography>
+            </Paper>
+          </Stack>
+        </Stack>
+      );
+    }
+
+    // Fallback for non-correlation insights without specific data
     if (insight.insightType !== "correlation" || !insight.comparisonData) {
-      // Single-metric insight - show simple stat with details
       return (
         <Box sx={{ py: 4 }}>
           <Box sx={{ textAlign: "center", mb: 3 }}>
@@ -365,6 +665,7 @@ export default function Insights() {
       );
     }
 
+    // Correlation insights
     const { comparisonType, comparisonData, scatterData } = insight;
 
     // Bar chart for comparison groups
@@ -393,11 +694,16 @@ export default function Insights() {
 
     return (
       <Stack spacing={3}>
-        {/* Summary */}
+        {/* Title and explanation */}
         <Box>
-          <Typography variant="body1" sx={{ fontWeight: 600 }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
             {insight.summary}
           </Typography>
+          {insight.detailedExplanation && (
+            <Typography variant="body2" color="text.secondary">
+              {insight.detailedExplanation}
+            </Typography>
+          )}
         </Box>
 
         {/* Bar Chart - Comparison */}
@@ -808,6 +1114,17 @@ export default function Insights() {
                 ? `${(compareResult.correlation * 100).toFixed(0)}%`
                 : "N/A"}
             </Typography>
+            {compareResult.correlation === null && (
+              <Typography
+                variant="caption"
+                color="text.disabled"
+                sx={{ display: "block", mt: 0.5, fontSize: "0.65rem" }}
+              >
+                {compareResult.points.length < 3
+                  ? "Need 3+ data points"
+                  : "Not enough variance"}
+              </Typography>
+            )}
           </Paper>
           <Paper
             variant="outlined"
@@ -1294,133 +1611,158 @@ export default function Insights() {
 
         <Divider sx={{ my: 2 }} />
 
-        {showSkeleton ? (
-          <Stack spacing={1}>
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} variant="rounded" height={72} />
-            ))}
-          </Stack>
-        ) : loading ? null : insights.length === 0 ? (
-          <Fade in timeout={300}>
-            <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
-              <Typography variant="body2">No insights yet</Typography>
-              <Typography variant="caption">
-                Log more data to discover patterns
-              </Typography>
-            </Box>
-          </Fade>
-        ) : (
-          <>
-            <Fade
-              in
-              timeout={300}
-              key={paginatedInsights.map((i) => i.metricTypeIdX).join("-")}
-            >
-              <Stack spacing={1}>
-                {paginatedInsights.map((insight, idx) => (
-                  <Paper
-                    key={`${insight.metricTypeIdX}-${
-                      insight.metricTypeIdY ?? "single"
-                    }-${idx}`}
-                    variant="outlined"
-                    onClick={() => handleSelectInsight(insight)}
-                    sx={{
-                      p: 1.5,
-                      borderRadius: 2,
-                      cursor: "pointer",
-                      borderColor: isInsightSelected(insight)
-                        ? "primary.main"
-                        : "divider",
-                      borderWidth: isInsightSelected(insight) ? 2 : 1,
-                      bgcolor: isInsightSelected(insight)
-                        ? "action.selected"
-                        : "transparent",
-                      transition: "all 0.2s ease-in-out",
-                      "&:hover": { bgcolor: "action.hover" },
-                    }}
-                  >
-                    <Stack
-                      direction="row"
-                      spacing={1.5}
-                      alignItems="flex-start"
+        <Tabs
+          value={activeTab}
+          onChange={(_, value) => value && setActiveTab(value)}
+          variant="fullWidth"
+          sx={{
+            minHeight: 36,
+            mb: 2,
+            "& .MuiTab-root": {
+              minHeight: 36,
+              textTransform: "none",
+              fontWeight: 500,
+            },
+          }}
+        >
+          <Tab
+            label={`Insights${
+              insights.length > 0 ? ` (${insights.length})` : ""
+            }`}
+            value="insights"
+          />
+          <Tab
+            label={`Metrics${
+              metricTypes.length > 0 ? ` (${metricTypes.length})` : ""
+            }`}
+            value="metrics"
+          />
+        </Tabs>
+
+        {activeTab === "insights" ? (
+          showSkeleton ? (
+            <Stack spacing={1}>
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} variant="rounded" height={72} />
+              ))}
+            </Stack>
+          ) : loading ? null : insights.length === 0 ? (
+            <Fade in timeout={300}>
+              <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
+                <Typography variant="body2">No insights yet</Typography>
+                <Typography variant="caption">
+                  Log more data to discover patterns
+                </Typography>
+              </Box>
+            </Fade>
+          ) : (
+            <>
+              <Fade
+                in
+                timeout={300}
+                key={paginatedInsights.map((i) => i.metricTypeIdX).join("-")}
+              >
+                <Stack spacing={1}>
+                  {paginatedInsights.map((insight, idx) => (
+                    <Paper
+                      key={`${insight.metricTypeIdX}-${
+                        insight.metricTypeIdY ?? "single"
+                      }-${idx}`}
+                      variant="outlined"
+                      onClick={() => handleSelectInsight(insight)}
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 2,
+                        cursor: "pointer",
+                        borderColor: isInsightSelected(insight)
+                          ? "primary.main"
+                          : "divider",
+                        borderWidth: isInsightSelected(insight) ? 2 : 1,
+                        bgcolor: isInsightSelected(insight)
+                          ? "action.selected"
+                          : "transparent",
+                        transition: "all 0.2s ease-in-out",
+                        "&:hover": { bgcolor: "action.hover" },
+                      }}
                     >
-                      <Box
-                        sx={{
-                          width: 36,
-                          height: 36,
-                          borderRadius: 1.5,
-                          display: "grid",
-                          placeItems: "center",
-                          bgcolor: getInsightColor(insight),
-                          color: "white",
-                          flexShrink: 0,
-                        }}
+                      <Stack
+                        direction="row"
+                        spacing={1.5}
+                        alignItems="flex-start"
                       >
-                        {getInsightIcon(insight)}
-                      </Box>
-                      <Box sx={{ minWidth: 0 }}>
-                        <Typography
-                          variant="body2"
+                        <Box
                           sx={{
-                            fontWeight: 500,
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            display: "-webkit-box",
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: "vertical",
+                            width: 36,
+                            height: 36,
+                            borderRadius: 1.5,
+                            display: "grid",
+                            placeItems: "center",
+                            bgcolor: getInsightColor(insight),
+                            color: "white",
+                            flexShrink: 0,
                           }}
                         >
-                          {insight.metricY
-                            ? `${insight.metricX} ↔ ${insight.metricY}`
-                            : insight.metricX}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {insight.insightType} • {insight.dataPoints} days
-                        </Typography>
-                      </Box>
-                    </Stack>
-                  </Paper>
-                ))}
-              </Stack>
-            </Fade>
-            {totalInsightPages > 1 && (
-              <Stack
-                direction="row"
-                justifyContent="center"
-                alignItems="center"
-                spacing={1}
-                sx={{ mt: 1.5 }}
-              >
-                <IconButton
-                  size="small"
-                  onClick={() => setInsightsPage((p) => Math.max(0, p - 1))}
-                  disabled={validInsightsPage === 0}
+                          {getInsightIcon(insight)}
+                        </Box>
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 500,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              display: "-webkit-box",
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: "vertical",
+                            }}
+                          >
+                            {insight.metricY
+                              ? `${insight.metricX} ↔ ${insight.metricY}`
+                              : insight.metricX}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {insight.insightType} • {insight.dataPoints} days
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </Paper>
+                  ))}
+                </Stack>
+              </Fade>
+              {totalInsightPages > 1 && (
+                <Stack
+                  direction="row"
+                  justifyContent="center"
+                  alignItems="center"
+                  spacing={1}
+                  sx={{ mt: 1.5 }}
                 >
-                  <ChevronLeftIcon />
-                </IconButton>
-                <Typography variant="caption" color="text.secondary">
-                  {validInsightsPage + 1} / {totalInsightPages}
-                </Typography>
-                <IconButton
-                  size="small"
-                  onClick={() =>
-                    setInsightsPage((p) =>
-                      Math.min(totalInsightPages - 1, p + 1)
-                    )
-                  }
-                  disabled={validInsightsPage >= totalInsightPages - 1}
-                >
-                  <ChevronRightIcon />
-                </IconButton>
-              </Stack>
-            )}
-          </>
-        )}
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* Individual Metrics */}
-        {metricTypes.length === 0 ? (
+                  <IconButton
+                    size="small"
+                    onClick={() => setInsightsPage((p) => Math.max(0, p - 1))}
+                    disabled={validInsightsPage === 0}
+                  >
+                    <ChevronLeftIcon />
+                  </IconButton>
+                  <Typography variant="caption" color="text.secondary">
+                    {validInsightsPage + 1} / {totalInsightPages}
+                  </Typography>
+                  <IconButton
+                    size="small"
+                    onClick={() =>
+                      setInsightsPage((p) =>
+                        Math.min(totalInsightPages - 1, p + 1)
+                      )
+                    }
+                    disabled={validInsightsPage >= totalInsightPages - 1}
+                  >
+                    <ChevronRightIcon />
+                  </IconButton>
+                </Stack>
+              )}
+            </>
+          )
+        ) : metricTypes.length === 0 ? (
           <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
             <Typography variant="body2">No metrics yet</Typography>
           </Box>
@@ -1465,7 +1807,6 @@ export default function Insights() {
               ))}
             </Stack>
 
-            {/* Pagination */}
             {totalMetricPages > 1 && (
               <Stack
                 direction="row"

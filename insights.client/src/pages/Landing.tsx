@@ -78,14 +78,15 @@ export default function Landing() {
           </Box>
 
           <Typography
-            variant="h1"
             sx={{
-              letterSpacing: "-2px",
+              fontFamily: '"Plus Jakarta Sans", system-ui, sans-serif',
+              fontWeight: 700,
+              letterSpacing: "-1px",
+              fontSize: { xs: "2.5rem", sm: "3.5rem", md: "4.5rem" },
               mb: 0.5,
-              fontSize: { xs: "2rem", sm: "3rem", md: "4rem" },
             }}
           >
-            INSIGHTS
+            insights
           </Typography>
 
           <Typography

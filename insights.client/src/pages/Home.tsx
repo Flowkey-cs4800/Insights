@@ -33,6 +33,7 @@ import ShowChartIcon from "@mui/icons-material/ShowChart";
 import CheckIcon from "@mui/icons-material/Check";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import TipsAndUpdatesIcon from "@mui/icons-material/TipsAndUpdates";
+import SettingsIcon from "@mui/icons-material/Settings";
 
 import {
   getMetricTypes,
@@ -660,7 +661,7 @@ export default function Home() {
         <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
           {/* Left column: Insight + Log Today + Goals */}
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Grid container spacing={3}>
+            <Grid container spacing={3} sx={{ alignItems: "stretch" }}>
               {/* Top Insight Card */}
               {topInsight && (
                 <Grid size={12}>
@@ -750,10 +751,13 @@ export default function Home() {
               )}
 
               {/* Log Today */}
-              <Grid size={{ xs: 12, md: 7 }}>
+              <Grid
+                size={{ xs: 12, md: goalCards.length > 0 ? 7 : 12 }}
+                sx={{ display: "flex" }}
+              >
                 <Paper
                   variant="outlined"
-                  sx={{ p: 3, borderRadius: 3, height: "100%" }}
+                  sx={{ p: 3, borderRadius: 3, flex: 1 }}
                 >
                   <Stack
                     direction="row"
@@ -918,73 +922,96 @@ export default function Home() {
 
                   <Stack
                     direction="row"
+                    justifyContent="space-between"
                     alignItems="center"
-                    spacing={0.75}
-                    onClick={
-                      metricTypes.length > 0 ? () => openLogDialog() : undefined
-                    }
-                    sx={{
-                      mt: 2,
-                      cursor: metricTypes.length > 0 ? "pointer" : "default",
-                      color: "text.secondary",
-                      opacity: metricTypes.length > 0 ? 1 : 0.4,
-                      "&:hover":
-                        metricTypes.length > 0 ? { color: "primary.main" } : {},
-                    }}
+                    sx={{ mt: 2 }}
                   >
-                    <HistoryIcon fontSize="small" />
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      Log a past day
-                    </Typography>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={0.75}
+                      onClick={
+                        metricTypes.length > 0
+                          ? () => openLogDialog()
+                          : undefined
+                      }
+                      sx={{
+                        cursor: metricTypes.length > 0 ? "pointer" : "default",
+                        color: "text.secondary",
+                        opacity: metricTypes.length > 0 ? 1 : 0.4,
+                        "&:hover":
+                          metricTypes.length > 0
+                            ? { color: "primary.main" }
+                            : {},
+                      }}
+                    >
+                      <HistoryIcon fontSize="small" />
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Log a past day
+                      </Typography>
+                    </Stack>
+
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={0.75}
+                      onClick={() => navigate("/metrics")}
+                      sx={{
+                        cursor: "pointer",
+                        color: "text.secondary",
+                        "&:hover": { color: "primary.main" },
+                      }}
+                    >
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Manage metrics
+                      </Typography>
+                      <SettingsIcon fontSize="small" />
+                    </Stack>
                   </Stack>
                 </Paper>
               </Grid>
 
-              {/* Goals + Today Completion */}
-              <Grid size={{ xs: 12, md: 5 }}>
-                <Paper
-                  variant="outlined"
-                  sx={{ p: 3, borderRadius: 3, height: "100%" }}
-                >
-                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                    Goals
-                  </Typography>
-
-                  {/* Today completion merged in */}
-                  <Box sx={{ mb: 3 }}>
-                    <Stack
-                      direction="row"
-                      justifyContent="space-between"
-                      alignItems="center"
-                      sx={{ mb: 0.5 }}
-                    >
-                      <Typography variant="body2" color="text.secondary">
-                        Today's progress
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {Math.round(todayPct * 100)}%
-                      </Typography>
-                    </Stack>
-                    <LinearProgress
-                      variant="determinate"
-                      value={Math.round(todayPct * 100)}
-                      sx={{ height: 8, borderRadius: 99 }}
-                    />
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ mt: 0.5, display: "block" }}
-                    >
-                      Completed {Math.round(todayPct * metricTypes.length)} of{" "}
-                      {metricTypes.length}
+              {/* Goals + Today Completion - only show if there are goals */}
+              {goalCards.length > 0 && (
+                <Grid size={{ xs: 12, md: 5 }} sx={{ display: "flex" }}>
+                  <Paper
+                    variant="outlined"
+                    sx={{ p: 3, borderRadius: 3, flex: 1 }}
+                  >
+                    <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                      Goals
                     </Typography>
-                  </Box>
 
-                  {goalCards.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      Set goal values on your metrics to track progress here.
-                    </Typography>
-                  ) : (
+                    {/* Today completion merged in */}
+                    <Box sx={{ mb: 3 }}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                        sx={{ mb: 0.5 }}
+                      >
+                        <Typography variant="body2" color="text.secondary">
+                          Today's progress
+                        </Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {Math.round(todayPct * 100)}%
+                        </Typography>
+                      </Stack>
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.round(todayPct * 100)}
+                        sx={{ height: 8, borderRadius: 99 }}
+                      />
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ mt: 0.5, display: "block" }}
+                      >
+                        Completed {Math.round(todayPct * metricTypes.length)} of{" "}
+                        {metricTypes.length}
+                      </Typography>
+                    </Box>
+
                     <Stack spacing={2}>
                       {goalCards.map((g) => (
                         <Box key={g.id}>
@@ -1014,9 +1041,9 @@ export default function Home() {
                         </Box>
                       ))}
                     </Stack>
-                  )}
-                </Paper>
-              </Grid>
+                  </Paper>
+                </Grid>
+              )}
 
               {/* Activity - only shown on mobile/tablet, hidden on lg+ */}
               <Grid size={12} sx={{ display: { xs: "block", lg: "none" } }}>
@@ -1182,7 +1209,7 @@ export default function Home() {
             color="text.secondary"
             sx={{ fontWeight: 400 }}
           >
-            Track anything — we'll find the patterns
+            Track anything â€” we'll find the patterns
           </Typography>
         </DialogTitle>
         <DialogContent>

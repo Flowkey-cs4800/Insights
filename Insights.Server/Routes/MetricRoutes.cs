@@ -348,13 +348,38 @@ public static class MetricRoutes
                 .Where(m => m.MetricTypeId == metricTypeIdY && m.UserId == userId)
                 .ToDictionaryAsync(m => m.Date, m => m.Value);
 
-            var commonDates = metricsX.Keys.Intersect(metricsY.Keys).OrderBy(d => d).ToList();
+            var xIsBoolean = typeX.Kind == MetricKind.Boolean;
+            var yIsBoolean = typeY.Kind == MetricKind.Boolean;
 
-            var points = commonDates.Select(date => new ComparePoint(
-                date.ToString("yyyy-MM-dd"),
-                metricsX[date],
-                metricsY[date]
-            )).ToList();
+            List<ComparePoint> points;
+
+            if (xIsBoolean || yIsBoolean)
+            {
+                // For boolean metrics, include all dates where EITHER metric was logged
+                // Treat missing boolean entries as 0
+                var allDates = metricsX.Keys.Union(metricsY.Keys).OrderBy(d => d).ToList();
+                
+                points = allDates.Select(date => new ComparePoint(
+                    date.ToString("yyyy-MM-dd"),
+                    metricsX.TryGetValue(date, out var xVal) ? xVal : (xIsBoolean ? 0 : -1),
+                    metricsY.TryGetValue(date, out var yVal) ? yVal : (yIsBoolean ? 0 : -1)
+                ))
+                // Filter out days where a non-boolean metric has no data
+                .Where(p => (xIsBoolean || p.X >= 0) && (yIsBoolean || p.Y >= 0))
+                // Fix the -1 sentinel values (shouldn't happen after filter, but safety)
+                .Select(p => new ComparePoint(p.Date, Math.Max(0, p.X), Math.Max(0, p.Y)))
+                .ToList();
+            }
+            else
+            {
+                // For numeric metrics, only include dates where both have data
+                var commonDates = metricsX.Keys.Intersect(metricsY.Keys).OrderBy(d => d).ToList();
+                points = commonDates.Select(date => new ComparePoint(
+                    date.ToString("yyyy-MM-dd"),
+                    metricsX[date],
+                    metricsY[date]
+                )).ToList();
+            }
 
             double? correlation = CalculateCorrelation(points);
 
@@ -917,7 +942,7 @@ public static class MetricRoutes
     // Pearson for compare endpoint (useful for scatter visualization)
     private static double? CalculateCorrelation(List<ComparePoint> points)
     {
-        if (points.Count < 2) return null;
+        if (points.Count < 3) return null; // Need at least 3 points for meaningful correlation
 
         var n = points.Count;
         var sumX = points.Sum(p => (double)p.X);
@@ -926,12 +951,23 @@ public static class MetricRoutes
         var sumX2 = points.Sum(p => (double)p.X * p.X);
         var sumY2 = points.Sum(p => (double)p.Y * p.Y);
 
+        // Calculate variances
+        var varX = n * sumX2 - sumX * sumX;
+        var varY = n * sumY2 - sumY * sumY;
+
+        // If either variable has no variance, correlation is undefined
+        if (varX <= 0 || varY <= 0) return null;
+
+        var denominator = Math.Sqrt(varX * varY);
+
+        // Handle floating point edge cases
+        if (denominator < 0.0001) return null;
+
         var numerator = (n * sumXY) - (sumX * sumY);
-        var denominator = Math.Sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+        var correlation = numerator / denominator;
 
-        if (denominator == 0) return null;
-
-        return numerator / denominator;
+        // Clamp to valid range [-1, 1] to handle floating point errors
+        return Math.Max(-1.0, Math.Min(1.0, correlation));
     }
 
     // Analytics helper methods

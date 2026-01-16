@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   Box,
   Typography,
@@ -6,6 +7,7 @@ import {
   Paper,
   Stack,
   Link,
+  CircularProgress,
 } from "@mui/material";
 import { alpha, keyframes } from "@mui/material/styles";
 import GoogleIcon from "@mui/icons-material/Google";
@@ -28,6 +30,12 @@ const glowPulse = keyframes`
 export default function Landing() {
   const { mode } = useTheme();
   const isDark = mode === "dark";
+  const [signingIn, setSigningIn] = useState(false);
+
+  const handleSignIn = () => {
+    setSigningIn(true);
+    login();
+  };
 
   return (
     <Box
@@ -45,14 +53,14 @@ export default function Landing() {
         <Box
           sx={{
             textAlign: "center",
-            pt: { xs: 6, md: 10 },
-            pb: { xs: 4, md: 6 },
+            pt: { xs: 4, md: 5 },
+            pb: { xs: 3, md: 4 },
           }}
         >
           {/* Glowing Logo */}
           <Box
             sx={{
-              mb: 3,
+              mb: 2,
               display: "flex",
               justifyContent: "center",
             }}
@@ -62,7 +70,7 @@ export default function Landing() {
               src="/logo.png"
               alt="Insights"
               sx={{
-                height: { xs: 64, md: 80 },
+                height: { xs: 56, md: 64 },
                 width: "auto",
                 animation: `${glowPulse} 3s ease-in-out infinite`,
               }}
@@ -73,8 +81,8 @@ export default function Landing() {
             variant="h3"
             sx={{
               letterSpacing: "-1px",
-              mb: 1,
-              fontSize: { xs: "1.75rem", sm: "2.25rem", md: "2.75rem" },
+              mb: 0.75,
+              fontSize: { xs: "1.75rem", sm: "2.25rem", md: "2.5rem" },
             }}
           >
             manage what you measure
@@ -83,7 +91,7 @@ export default function Landing() {
           <Typography
             variant="body1"
             color="text.secondary"
-            sx={{ mb: 4, fontSize: { xs: "1rem", md: "1.1rem" } }}
+            sx={{ mb: 3, fontSize: { xs: "1rem", md: "1.1rem" } }}
           >
             track your habits. find the patterns.
           </Typography>
@@ -92,15 +100,23 @@ export default function Landing() {
           <Button
             variant="contained"
             size="large"
-            onClick={() => login()}
-            startIcon={<GoogleIcon />}
+            onClick={handleSignIn}
+            disabled={signingIn}
+            startIcon={
+              signingIn ? (
+                <CircularProgress size={20} color="inherit" />
+              ) : (
+                <GoogleIcon />
+              )
+            }
             sx={(theme) => ({
               textTransform: "none",
-              px: 5,
-              py: 1.75,
+              px: 4,
+              py: 1.5,
               borderRadius: 3,
-              fontSize: "1.1rem",
+              fontSize: "1rem",
               fontWeight: 600,
+              minWidth: 220,
               boxShadow: `0 4px 14px 0 ${alpha(
                 theme.palette.primary.main,
                 0.35
@@ -113,7 +129,7 @@ export default function Landing() {
               },
             })}
           >
-            Sign in with Google
+            {signingIn ? "Signing in..." : "Sign in with Google"}
           </Button>
         </Box>
 
@@ -131,8 +147,8 @@ export default function Landing() {
           {/* Fake browser bar */}
           <Box
             sx={{
-              px: 2,
-              py: 1.5,
+              px: 1.5,
+              py: 1,
               borderBottom: "1px solid",
               borderColor: isDark ? "grey.800" : "grey.200",
               display: "flex",
@@ -141,24 +157,24 @@ export default function Landing() {
           >
             <Box
               sx={{
-                width: 10,
-                height: 10,
+                width: 8,
+                height: 8,
                 borderRadius: "50%",
                 bgcolor: isDark ? "grey.700" : "grey.300",
               }}
             />
             <Box
               sx={{
-                width: 10,
-                height: 10,
+                width: 8,
+                height: 8,
                 borderRadius: "50%",
                 bgcolor: isDark ? "grey.700" : "grey.300",
               }}
             />
             <Box
               sx={{
-                width: 10,
-                height: 10,
+                width: 8,
+                height: 8,
                 borderRadius: "50%",
                 bgcolor: isDark ? "grey.700" : "grey.300",
               }}
@@ -166,12 +182,12 @@ export default function Landing() {
           </Box>
 
           {/* Content area - shows example insight */}
-          <Box sx={{ p: 3 }}>
+          <Box sx={{ p: 2 }}>
             {/* Example insight card */}
             <Paper
               variant="outlined"
               sx={(theme) => ({
-                p: 2,
+                p: 1.5,
                 borderRadius: 3,
                 borderColor: "primary.light",
                 bgcolor: alpha(
@@ -181,7 +197,7 @@ export default function Landing() {
               })}
             >
               <Stack direction="row" alignItems="center" spacing={1.5}>
-                <TipsAndUpdatesIcon sx={{ color: "#facc15", fontSize: 24 }} />
+                <TipsAndUpdatesIcon sx={{ color: "#facc15", fontSize: 22 }} />
                 <Box>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
                     your mood is 34% better on days you exercise and sleep 7+
@@ -195,7 +211,7 @@ export default function Landing() {
             </Paper>
 
             {/* Example metric logs */}
-            <Stack spacing={1} sx={{ mt: 2 }}>
+            <Stack spacing={0.75} sx={{ mt: 1.5 }}>
               {[
                 { name: "Exercise", checked: true },
                 { name: "Sleep", value: "7.5 hrs" },
@@ -205,7 +221,7 @@ export default function Landing() {
                   key={item.name}
                   variant="outlined"
                   sx={{
-                    p: 1.25,
+                    p: 1,
                     borderRadius: 2,
                     display: "flex",
                     justifyContent: "space-between",
@@ -236,8 +252,8 @@ export default function Landing() {
           color="text.secondary"
           sx={{
             textAlign: "center",
-            mt: 4,
-            mb: 2,
+            mt: 3,
+            mb: 1.5,
             fontStyle: "italic",
           }}
         >
@@ -250,7 +266,7 @@ export default function Landing() {
       <Box
         component="footer"
         sx={{
-          py: 3,
+          py: 2,
           textAlign: "center",
         }}
       >

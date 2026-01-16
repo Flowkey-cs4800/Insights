@@ -120,9 +120,11 @@ export default function Home() {
   const [err, setErr] = useState<string | null>(null);
   const [logPage, setLogPage] = useState(0);
   const [gridPage, setGridPage] = useState(0);
+  const [sidebarPage, setSidebarPage] = useState(0);
 
   const METRICS_PER_PAGE = 5;
   const GRIDS_PER_PAGE = 6;
+  const SIDEBAR_GRIDS_PER_PAGE = 3;
 
   useEffect(() => {
     if (!initialLoading) return;
@@ -359,12 +361,23 @@ export default function Home() {
     return monthlyGrids.slice(start, start + GRIDS_PER_PAGE);
   }, [monthlyGrids, gridPage]);
 
+  const totalSidebarPages = Math.ceil(
+    monthlyGrids.length / SIDEBAR_GRIDS_PER_PAGE
+  );
+  const sidebarGrids = useMemo(() => {
+    const start = sidebarPage * SIDEBAR_GRIDS_PER_PAGE;
+    return monthlyGrids.slice(start, start + SIDEBAR_GRIDS_PER_PAGE);
+  }, [monthlyGrids, sidebarPage]);
+
   // Reset grid page if out of bounds
   useEffect(() => {
     if (gridPage >= totalGridPages && totalGridPages > 0) {
       setGridPage(totalGridPages - 1);
     }
-  }, [gridPage, totalGridPages]);
+    if (sidebarPage >= totalSidebarPages && totalSidebarPages > 0) {
+      setSidebarPage(totalSidebarPages - 1);
+    }
+  }, [gridPage, totalGridPages, sidebarPage, totalSidebarPages]);
 
   const toggleBooleanToday = async (mt: MetricType) => {
     const key = `${mt.metricTypeId}|${today}`;
@@ -553,9 +566,19 @@ export default function Home() {
   const ProgressGrid = ({ mt, days }: { mt: MetricType; days: number[] }) => (
     <Paper
       variant="outlined"
-      sx={{ p: 2, borderRadius: 3, height: "100%", overflow: "hidden" }}
+      sx={{
+        p: 1,
+        borderRadius: 2,
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+      }}
     >
-      <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1.5 }} noWrap>
+      <Typography
+        variant="caption"
+        sx={{ fontWeight: 600, mb: 0.5, display: "block", fontSize: "0.7rem" }}
+        noWrap
+      >
         {mt.name}
       </Typography>
 
@@ -563,7 +586,9 @@ export default function Home() {
         sx={{
           display: "grid",
           gridTemplateColumns: "repeat(7, 1fr)",
-          gap: "4px",
+          gap: "2px",
+          flex: 1,
+          alignContent: "start",
         }}
       >
         {days.map((v, idx) => (
@@ -571,7 +596,7 @@ export default function Home() {
             key={idx}
             sx={{
               aspectRatio: "1",
-              borderRadius: 1,
+              borderRadius: 0.5,
               bgcolor: v ? "primary.main" : "action.disabledBackground",
             }}
           />
@@ -581,7 +606,7 @@ export default function Home() {
       <Typography
         variant="caption"
         color="text.secondary"
-        sx={{ display: "block", mt: 1 }}
+        sx={{ display: "block", mt: 0.5, fontSize: "0.7rem" }}
       >
         {days.filter(Boolean).length} active days
       </Typography>
@@ -591,418 +616,528 @@ export default function Home() {
   return (
     <Box sx={{ width: "100%" }}>
       {showSkeleton ? (
-        <Grid container spacing={3}>
-          <Grid size={12}>
-            <Skeleton variant="rounded" height={72} sx={{ borderRadius: 3 }} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 7 }}>
+        <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Grid container spacing={3}>
+              <Grid size={12}>
+                <Skeleton
+                  variant="rounded"
+                  height={72}
+                  sx={{ borderRadius: 3 }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 7 }}>
+                <Skeleton
+                  variant="rounded"
+                  height={320}
+                  sx={{ borderRadius: 3 }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 5 }}>
+                <Skeleton
+                  variant="rounded"
+                  height={320}
+                  sx={{ borderRadius: 3 }}
+                />
+              </Grid>
+            </Grid>
+          </Box>
+          <Box
+            sx={{
+              width: { xs: "100%", lg: 220 },
+              flexShrink: 0,
+              display: { xs: "none", lg: "block" },
+            }}
+          >
             <Skeleton variant="rounded" height={320} sx={{ borderRadius: 3 }} />
-          </Grid>
-          <Grid size={{ xs: 12, md: 5 }}>
-            <Skeleton variant="rounded" height={320} sx={{ borderRadius: 3 }} />
-          </Grid>
-          <Grid size={12}>
-            <Skeleton variant="rounded" height={200} sx={{ borderRadius: 3 }} />
-          </Grid>
-        </Grid>
+          </Box>
+        </Stack>
       ) : initialLoading ? null : (
-        <Grid container spacing={3}>
-          {/* Top Insight Card */}
-          {topInsight && (
-            <Grid size={12}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  borderRadius: 3,
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  borderColor: "primary.light",
-                  bgcolor: (theme) =>
-                    alpha(
-                      theme.palette.primary.main,
-                      theme.palette.mode === "dark" ? 0.08 : 0.04
-                    ),
-                  "&:hover": {
-                    borderColor: "primary.main",
-                    bgcolor: (theme) =>
-                      alpha(
-                        theme.palette.primary.main,
-                        theme.palette.mode === "dark" ? 0.12 : 0.08
-                      ),
-                  },
-                }}
-                onClick={() => navigate("/insights")}
-              >
-                <Stack direction="row" alignItems="center" spacing={1.5}>
-                  <TipsAndUpdatesIcon sx={{ color: "#facc15", fontSize: 24 }} />
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontWeight: 600, lineHeight: 1.4 }}
+        <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
+          {/* Left column: Insight + Log Today + Goals */}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Grid container spacing={3}>
+              {/* Top Insight Card */}
+              {topInsight && (
+                <Grid size={12}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2,
+                      borderRadius: 3,
+                      cursor: "pointer",
+                      transition: "all 0.2s",
+                      borderColor: "primary.light",
+                      bgcolor: (theme) =>
+                        alpha(
+                          theme.palette.primary.main,
+                          theme.palette.mode === "dark" ? 0.08 : 0.04
+                        ),
+                      "&:hover": {
+                        borderColor: "primary.main",
+                        bgcolor: (theme) =>
+                          alpha(
+                            theme.palette.primary.main,
+                            theme.palette.mode === "dark" ? 0.12 : 0.08
+                          ),
+                      },
+                    }}
+                    onClick={() => navigate("/insights")}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1.5}>
+                      <TipsAndUpdatesIcon
+                        sx={{ color: "#facc15", fontSize: 24 }}
+                      />
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{ fontWeight: 600, lineHeight: 1.4 }}
+                        >
+                          {topInsight.summary}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {topInsight.dataPoints} days
+                        </Typography>
+                      </Box>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={0.5}
+                        sx={{ color: "primary.main", flexShrink: 0 }}
+                      >
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 600,
+                            display: { xs: "none", sm: "block" },
+                          }}
+                        >
+                          Explore
+                        </Typography>
+                        <ArrowForwardIcon sx={{ fontSize: 18 }} />
+                      </Stack>
+                    </Stack>
+                  </Paper>
+                </Grid>
+              )}
+
+              {/* Empty state for insights */}
+              {!topInsight && metricTypes.length >= 1 && (
+                <Grid size={12}>
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 3,
+                      borderRadius: 3,
+                      textAlign: "center",
+                    }}
+                  >
+                    <ShowChartIcon
+                      sx={{ fontSize: 40, color: "text.disabled", mb: 1 }}
+                    />
+                    <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                      Not enough data for insights yet
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Log a few more days to discover patterns and correlations.
+                    </Typography>
+                  </Paper>
+                </Grid>
+              )}
+
+              {/* Log Today */}
+              <Grid size={{ xs: 12, md: 7 }}>
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 3, borderRadius: 3, height: "100%" }}
+                >
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="flex-start"
+                    sx={{ mb: 2 }}
+                  >
+                    <Box>
+                      <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                        Log today
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        Check off habits and record values
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Chip
+                        size="small"
+                        icon={<CalendarMonthIcon />}
+                        label={new Date().toLocaleDateString(undefined, {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                        variant="outlined"
+                        sx={{ px: 1 }}
+                      />
+                      <Tooltip title="Add metric">
+                        <IconButton
+                          size="small"
+                          onClick={openCreate}
+                          sx={{
+                            bgcolor: "primary.main",
+                            color: "white",
+                            "&:hover": { bgcolor: "primary.dark" },
+                          }}
+                        >
+                          <AddIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Stack>
+
+                  <Stack spacing={1}>
+                    {paginatedMetrics.map((mt) => {
+                      const isBoolean = mt.kind === "Boolean";
+                      const checked =
+                        todayChecked.get(mt.metricTypeId) ?? false;
+                      const key = `${mt.metricTypeId}|${today}`;
+                      const busy = mutatingKey === key;
+                      const todayEntry = metricByTypeAndDate.get(key);
+                      const todayValue = todayEntry?.value ?? 0;
+
+                      return (
+                        <Paper
+                          key={mt.metricTypeId}
+                          variant="outlined"
+                          sx={{ p: 1.25, borderRadius: 2 }}
+                        >
+                          <Stack
+                            direction="row"
+                            alignItems="center"
+                            spacing={1.5}
+                          >
+                            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 600 }}
+                                noWrap
+                              >
+                                {mt.name}
+                              </Typography>
+                              {(isBoolean || mt.unit) && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {isBoolean ? "log" : mt.unit}
+                                </Typography>
+                              )}
+                            </Box>
+                            {isBoolean ? (
+                              <Button
+                                variant="outlined"
+                                color={checked ? "primary" : "inherit"}
+                                onClick={() => void toggleBooleanToday(mt)}
+                                disabled={busy}
+                                sx={{
+                                  minWidth: 148,
+                                  height: 40,
+                                  textTransform: "none",
+                                  fontWeight: 500,
+                                  borderRadius: 2,
+                                }}
+                              >
+                                {checked ? <CheckIcon /> : "Log"}
+                              </Button>
+                            ) : (
+                              <InlineStepper
+                                value={todayValue}
+                                onChange={(v) => void handleValueChange(mt, v)}
+                                size="compact"
+                              />
+                            )}
+                          </Stack>
+                        </Paper>
+                      );
+                    })}
+
+                    {/* Empty state */}
+                    {metricTypes.length === 0 && (
+                      <Paper
+                        variant="outlined"
+                        onClick={openCreate}
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          borderStyle: "dashed",
+                          borderWidth: 2,
+                          borderColor: "primary.light",
+                          cursor: "pointer",
+                          textAlign: "center",
+                          "&:hover": { bgcolor: "action.hover" },
+                        }}
+                      >
+                        <AddIcon sx={{ color: "primary.light", mb: 0.5 }} />
+                        <Typography variant="body2" color="primary.light">
+                          Add your first metric
+                        </Typography>
+                      </Paper>
+                    )}
+                  </Stack>
+
+                  {/* Pagination controls */}
+                  {totalPages > 1 && (
+                    <Stack
+                      direction="row"
+                      justifyContent="center"
+                      alignItems="center"
+                      spacing={1}
+                      sx={{ mt: 2 }}
                     >
-                      {topInsight.summary}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {topInsight.dataPoints} days
-                    </Typography>
-                  </Box>
+                      <IconButton
+                        size="small"
+                        onClick={() => setLogPage((p) => p - 1)}
+                        disabled={logPage === 0}
+                      >
+                        <ChevronLeftIcon />
+                      </IconButton>
+                      <Typography variant="caption" color="text.secondary">
+                        {logPage + 1} / {totalPages}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        onClick={() => setLogPage((p) => p + 1)}
+                        disabled={logPage >= totalPages - 1}
+                      >
+                        <ChevronRightIcon />
+                      </IconButton>
+                    </Stack>
+                  )}
+
                   <Stack
                     direction="row"
                     alignItems="center"
-                    spacing={0.5}
-                    sx={{ color: "primary.main", flexShrink: 0 }}
+                    spacing={0.75}
+                    onClick={() => openLogDialog()}
+                    sx={{
+                      mt: 2,
+                      cursor: "pointer",
+                      color: "text.secondary",
+                      "&:hover": { color: "primary.main" },
+                    }}
                   >
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontWeight: 600,
-                        display: { xs: "none", sm: "block" },
-                      }}
-                    >
-                      Explore
+                    <HistoryIcon fontSize="small" />
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      Log a past day
                     </Typography>
-                    <ArrowForwardIcon sx={{ fontSize: 18 }} />
                   </Stack>
-                </Stack>
-              </Paper>
-            </Grid>
-          )}
+                </Paper>
+              </Grid>
 
-          {/* Empty state for insights */}
-          {!topInsight && metricTypes.length >= 1 && (
-            <Grid size={12}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  textAlign: "center",
-                }}
-              >
-                <ShowChartIcon
-                  sx={{ fontSize: 40, color: "text.disabled", mb: 1 }}
-                />
-                <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                  Not enough data for insights yet
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Log a few more days to discover patterns and correlations.
-                </Typography>
-              </Paper>
-            </Grid>
-          )}
-
-          {/* Log Today */}
-          <Grid size={{ xs: 12, md: 7 }}>
-            <Paper
-              variant="outlined"
-              sx={{ p: 3, borderRadius: 3, height: "100%" }}
-            >
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="flex-start"
-                sx={{ mb: 2 }}
-              >
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Log today
+              {/* Goals + Today Completion */}
+              <Grid size={{ xs: 12, md: 5 }}>
+                <Paper
+                  variant="outlined"
+                  sx={{ p: 3, borderRadius: 3, height: "100%" }}
+                >
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    Goals
                   </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Check off habits and record values
-                  </Typography>
-                </Box>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Chip
-                    size="small"
-                    icon={<CalendarMonthIcon />}
-                    label={new Date().toLocaleDateString(undefined, {
-                      weekday: "short",
-                      month: "short",
-                      day: "numeric",
-                    })}
-                    variant="outlined"
-                    sx={{ px: 1 }}
-                  />
-                  <Tooltip title="Add metric">
-                    <IconButton
-                      size="small"
-                      onClick={openCreate}
-                      sx={{
-                        bgcolor: "primary.main",
-                        color: "white",
-                        "&:hover": { bgcolor: "primary.dark" },
-                      }}
-                    >
-                      <AddIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              </Stack>
 
-              <Stack spacing={1}>
-                {paginatedMetrics.map((mt) => {
-                  const isBoolean = mt.kind === "Boolean";
-                  const checked = todayChecked.get(mt.metricTypeId) ?? false;
-                  const key = `${mt.metricTypeId}|${today}`;
-                  const busy = mutatingKey === key;
-                  const todayEntry = metricByTypeAndDate.get(key);
-                  const todayValue = todayEntry?.value ?? 0;
-
-                  return (
-                    <Paper
-                      key={mt.metricTypeId}
-                      variant="outlined"
-                      sx={{ p: 1.25, borderRadius: 2 }}
+                  {/* Today completion merged in */}
+                  <Box sx={{ mb: 3 }}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                      sx={{ mb: 0.5 }}
                     >
-                      <Stack direction="row" alignItems="center" spacing={1.5}>
-                        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-                          <Typography
-                            variant="body2"
-                            sx={{ fontWeight: 600 }}
-                            noWrap
+                      <Typography variant="body2" color="text.secondary">
+                        Today's progress
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {Math.round(todayPct * 100)}%
+                      </Typography>
+                    </Stack>
+                    <LinearProgress
+                      variant="determinate"
+                      value={Math.round(todayPct * 100)}
+                      sx={{ height: 8, borderRadius: 99 }}
+                    />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: 0.5, display: "block" }}
+                    >
+                      Completed {Math.round(todayPct * metricTypes.length)} of{" "}
+                      {metricTypes.length}
+                    </Typography>
+                  </Box>
+
+                  {goalCards.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Set goal values on your metrics to track progress here.
+                    </Typography>
+                  ) : (
+                    <Stack spacing={2}>
+                      {goalCards.map((g) => (
+                        <Box key={g.id}>
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            sx={{ mb: 0.5 }}
                           >
-                            {mt.name}
-                          </Typography>
-                          {(isBoolean || mt.unit) && (
+                            <Typography
+                              variant="body2"
+                              sx={{ fontWeight: 600 }}
+                            >
+                              {g.label}
+                            </Typography>
                             <Typography
                               variant="caption"
                               color="text.secondary"
                             >
-                              {isBoolean ? "log" : mt.unit}
+                              {g.meta} | {g.cadenceLabel}
                             </Typography>
-                          )}
-                        </Box>
-                        {isBoolean ? (
-                          <Button
-                            variant="outlined"
-                            color={checked ? "primary" : "inherit"}
-                            onClick={() => void toggleBooleanToday(mt)}
-                            disabled={busy}
-                            sx={{
-                              minWidth: 148,
-                              height: 40,
-                              textTransform: "none",
-                              fontWeight: 500,
-                              borderRadius: 2,
-                            }}
-                          >
-                            {checked ? <CheckIcon /> : "Log"}
-                          </Button>
-                        ) : (
-                          <InlineStepper
-                            value={todayValue}
-                            onChange={(v) => void handleValueChange(mt, v)}
-                            size="compact"
+                          </Stack>
+                          <LinearProgress
+                            variant="determinate"
+                            value={g.progress * 100}
+                            sx={{ height: 6, borderRadius: 99 }}
                           />
-                        )}
-                      </Stack>
-                    </Paper>
-                  );
-                })}
+                        </Box>
+                      ))}
+                    </Stack>
+                  )}
+                </Paper>
+              </Grid>
 
-                {/* Empty state */}
-                {metricTypes.length === 0 && (
-                  <Paper
-                    variant="outlined"
-                    onClick={openCreate}
-                    sx={{
-                      p: 2,
-                      borderRadius: 2,
-                      borderStyle: "dashed",
-                      borderWidth: 2,
-                      borderColor: "primary.light",
-                      cursor: "pointer",
-                      textAlign: "center",
-                      "&:hover": { bgcolor: "action.hover" },
-                    }}
+              {/* Activity - only shown on mobile/tablet, hidden on lg+ */}
+              <Grid size={12} sx={{ display: { xs: "block", lg: "none" } }}>
+                <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                    sx={{ mb: 2 }}
                   >
-                    <AddIcon sx={{ color: "primary.light", mb: 0.5 }} />
-                    <Typography variant="body2" color="primary.light">
-                      Add your first metric
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                      Activity this month
                     </Typography>
-                  </Paper>
-                )}
-              </Stack>
+                    {totalGridPages > 1 && (
+                      <Stack direction="row" alignItems="center" spacing={1}>
+                        <IconButton
+                          size="small"
+                          onClick={() => setGridPage((p) => p - 1)}
+                          disabled={gridPage === 0}
+                        >
+                          <ChevronLeftIcon />
+                        </IconButton>
+                        <Typography variant="caption" color="text.secondary">
+                          {gridPage + 1} / {totalGridPages}
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={() => setGridPage((p) => p + 1)}
+                          disabled={gridPage >= totalGridPages - 1}
+                        >
+                          <ChevronRightIcon />
+                        </IconButton>
+                      </Stack>
+                    )}
+                  </Stack>
+                  {monthlyGrids.length === 0 ? (
+                    <Typography color="text.secondary">
+                      No metrics yet.
+                    </Typography>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "repeat(2, 1fr)",
+                          sm: "repeat(3, 1fr)",
+                          md: "repeat(6, 1fr)",
+                        },
+                        gap: 2,
+                      }}
+                    >
+                      {paginatedGrids.map(({ metricType: mt, days }) => (
+                        <ProgressGrid
+                          key={mt.metricTypeId}
+                          mt={mt}
+                          days={days}
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
 
-              {/* Pagination controls */}
-              {totalPages > 1 && (
-                <Stack
-                  direction="row"
-                  justifyContent="center"
-                  alignItems="center"
-                  spacing={1}
-                  sx={{ mt: 2 }}
-                >
+          {/* Right column: Activity - only on lg+ */}
+          <Paper
+            variant="outlined"
+            sx={{
+              width: { xs: "100%", lg: 220 },
+              flexShrink: 0,
+              borderRadius: 3,
+              p: 1.5,
+              display: { xs: "none", lg: "block" },
+              position: { lg: "sticky" },
+              top: { lg: 88 },
+              alignSelf: "flex-start",
+            }}
+          >
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              sx={{ mb: 1 }}
+            >
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Activity
+              </Typography>
+              {totalSidebarPages > 1 && (
+                <Stack direction="row" alignItems="center" spacing={0.5}>
                   <IconButton
                     size="small"
-                    onClick={() => setLogPage((p) => p - 1)}
-                    disabled={logPage === 0}
+                    onClick={() => setSidebarPage((p) => p - 1)}
+                    disabled={sidebarPage === 0}
                   >
-                    <ChevronLeftIcon />
+                    <ChevronLeftIcon fontSize="small" />
                   </IconButton>
                   <Typography variant="caption" color="text.secondary">
-                    {logPage + 1} / {totalPages}
+                    {sidebarPage + 1}/{totalSidebarPages}
                   </Typography>
                   <IconButton
                     size="small"
-                    onClick={() => setLogPage((p) => p + 1)}
-                    disabled={logPage >= totalPages - 1}
+                    onClick={() => setSidebarPage((p) => p + 1)}
+                    disabled={sidebarPage >= totalSidebarPages - 1}
                   >
-                    <ChevronRightIcon />
+                    <ChevronRightIcon fontSize="small" />
                   </IconButton>
                 </Stack>
               )}
-
-              <Stack
-                direction="row"
-                alignItems="center"
-                spacing={0.75}
-                onClick={() => openLogDialog()}
+            </Stack>
+            {monthlyGrids.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No metrics yet.
+              </Typography>
+            ) : (
+              <Box
                 sx={{
-                  mt: 2,
-                  cursor: "pointer",
-                  color: "text.secondary",
-                  "&:hover": { color: "primary.main" },
+                  display: "grid",
+                  gridTemplateRows: "repeat(3, 1fr)",
+                  gap: 1,
                 }}
               >
-                <HistoryIcon fontSize="small" />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Log a past day
-                </Typography>
-              </Stack>
-            </Paper>
-          </Grid>
-
-          {/* Goals + Today Completion */}
-          <Grid size={{ xs: 12, md: 5 }}>
-            <Paper
-              variant="outlined"
-              sx={{ p: 3, borderRadius: 3, height: "100%" }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                Goals
-              </Typography>
-
-              {/* Today completion merged in */}
-              <Box sx={{ mb: 3 }}>
-                <Stack
-                  direction="row"
-                  justifyContent="space-between"
-                  alignItems="center"
-                  sx={{ mb: 0.5 }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    Today's progress
-                  </Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                    {Math.round(todayPct * 100)}%
-                  </Typography>
-                </Stack>
-                <LinearProgress
-                  variant="determinate"
-                  value={Math.round(todayPct * 100)}
-                  sx={{ height: 8, borderRadius: 99 }}
-                />
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ mt: 0.5, display: "block" }}
-                >
-                  Completed {Math.round(todayPct * metricTypes.length)} of{" "}
-                  {metricTypes.length}
-                </Typography>
+                {sidebarGrids.map(({ metricType: mt, days }) => (
+                  <ProgressGrid key={mt.metricTypeId} mt={mt} days={days} />
+                ))}
               </Box>
-
-              {goalCards.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  Set goal values on your metrics to track progress here.
-                </Typography>
-              ) : (
-                <Stack spacing={2}>
-                  {goalCards.map((g) => (
-                    <Box key={g.id}>
-                      <Stack
-                        direction="row"
-                        justifyContent="space-between"
-                        sx={{ mb: 0.5 }}
-                      >
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {g.label}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {g.meta} | {g.cadenceLabel}
-                        </Typography>
-                      </Stack>
-                      <LinearProgress
-                        variant="determinate"
-                        value={g.progress * 100}
-                        sx={{ height: 6, borderRadius: 99 }}
-                      />
-                    </Box>
-                  ))}
-                </Stack>
-              )}
-            </Paper>
-          </Grid>
-
-          {/* Activity this month */}
-          <Grid size={12}>
-            <Paper variant="outlined" sx={{ p: 3, borderRadius: 3 }}>
-              <Stack
-                direction="row"
-                justifyContent="space-between"
-                alignItems="center"
-                sx={{ mb: 2 }}
-              >
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  Activity this month
-                </Typography>
-                {totalGridPages > 1 && (
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <IconButton
-                      size="small"
-                      onClick={() => setGridPage((p) => p - 1)}
-                      disabled={gridPage === 0}
-                    >
-                      <ChevronLeftIcon />
-                    </IconButton>
-                    <Typography variant="caption" color="text.secondary">
-                      {gridPage + 1} / {totalGridPages}
-                    </Typography>
-                    <IconButton
-                      size="small"
-                      onClick={() => setGridPage((p) => p + 1)}
-                      disabled={gridPage >= totalGridPages - 1}
-                    >
-                      <ChevronRightIcon />
-                    </IconButton>
-                  </Stack>
-                )}
-              </Stack>
-              {monthlyGrids.length === 0 ? (
-                <Typography color="text.secondary">No metrics yet.</Typography>
-              ) : (
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: {
-                      xs: "repeat(2, 1fr)",
-                      sm: "repeat(3, 1fr)",
-                      md: "repeat(6, 1fr)",
-                    },
-                    gap: 2,
-                  }}
-                >
-                  {paginatedGrids.map(({ metricType: mt, days }) => (
-                    <ProgressGrid key={mt.metricTypeId} mt={mt} days={days} />
-                  ))}
-                </Box>
-              )}
-            </Paper>
-          </Grid>
-        </Grid>
+            )}
+          </Paper>
+        </Stack>
       )}
 
       {/* Log Dialog */}

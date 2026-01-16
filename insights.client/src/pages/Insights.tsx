@@ -120,6 +120,7 @@ function ChartTooltip({
   );
 }
 
+const INSIGHTS_PER_PAGE = 5;
 const METRICS_PER_PAGE = 5;
 
 export default function Insights() {
@@ -145,6 +146,7 @@ export default function Insights() {
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
 
   const [metricsPage, setMetricsPage] = useState(0);
+  const [insightsPage, setInsightsPage] = useState(0);
 
   const [xMetric, setXMetric] = useState<string>("");
   const [yMetric, setYMetric] = useState<string>("");
@@ -264,6 +266,16 @@ export default function Insights() {
     const start = validMetricsPage * METRICS_PER_PAGE;
     return metricTypes.slice(start, start + METRICS_PER_PAGE);
   }, [metricTypes, validMetricsPage]);
+
+  const totalInsightPages = Math.ceil(insights.length / INSIGHTS_PER_PAGE);
+
+  const validInsightsPage =
+    totalInsightPages > 0 ? Math.min(insightsPage, totalInsightPages - 1) : 0;
+
+  const paginatedInsights = useMemo(() => {
+    const start = validInsightsPage * INSIGHTS_PER_PAGE;
+    return insights.slice(start, start + INSIGHTS_PER_PAGE);
+  }, [insights, validInsightsPage]);
 
   const handleSelectInsight = (insight: InsightItem) => {
     setSelection({ type: "insight", insight });
@@ -1298,74 +1310,111 @@ export default function Insights() {
             </Box>
           </Fade>
         ) : (
-          <Fade
-            in
-            timeout={300}
-            key={insights.map((i) => i.metricTypeIdX).join("-")}
-          >
-            <Stack spacing={1}>
-              {insights.map((insight, idx) => (
-                <Paper
-                  key={`${insight.metricTypeIdX}-${
-                    insight.metricTypeIdY ?? "single"
-                  }-${idx}`}
-                  variant="outlined"
-                  onClick={() => handleSelectInsight(insight)}
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 2,
-                    cursor: "pointer",
-                    borderColor: isInsightSelected(insight)
-                      ? "primary.main"
-                      : "divider",
-                    borderWidth: isInsightSelected(insight) ? 2 : 1,
-                    bgcolor: isInsightSelected(insight)
-                      ? "action.selected"
-                      : "transparent",
-                    transition: "all 0.2s ease-in-out",
-                    "&:hover": { bgcolor: "action.hover" },
-                  }}
-                >
-                  <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                    <Box
-                      sx={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 1.5,
-                        display: "grid",
-                        placeItems: "center",
-                        bgcolor: getInsightColor(insight),
-                        color: "white",
-                        flexShrink: 0,
-                      }}
+          <>
+            <Fade
+              in
+              timeout={300}
+              key={paginatedInsights.map((i) => i.metricTypeIdX).join("-")}
+            >
+              <Stack spacing={1}>
+                {paginatedInsights.map((insight, idx) => (
+                  <Paper
+                    key={`${insight.metricTypeIdX}-${
+                      insight.metricTypeIdY ?? "single"
+                    }-${idx}`}
+                    variant="outlined"
+                    onClick={() => handleSelectInsight(insight)}
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 2,
+                      cursor: "pointer",
+                      borderColor: isInsightSelected(insight)
+                        ? "primary.main"
+                        : "divider",
+                      borderWidth: isInsightSelected(insight) ? 2 : 1,
+                      bgcolor: isInsightSelected(insight)
+                        ? "action.selected"
+                        : "transparent",
+                      transition: "all 0.2s ease-in-out",
+                      "&:hover": { bgcolor: "action.hover" },
+                    }}
+                  >
+                    <Stack
+                      direction="row"
+                      spacing={1.5}
+                      alignItems="flex-start"
                     >
-                      {getInsightIcon(insight)}
-                    </Box>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography
-                        variant="body2"
+                      <Box
                         sx={{
-                          fontWeight: 500,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          display: "-webkit-box",
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: "vertical",
+                          width: 36,
+                          height: 36,
+                          borderRadius: 1.5,
+                          display: "grid",
+                          placeItems: "center",
+                          bgcolor: getInsightColor(insight),
+                          color: "white",
+                          flexShrink: 0,
                         }}
                       >
-                        {insight.metricY
-                          ? `${insight.metricX} <-> ${insight.metricY}`
-                          : insight.metricX}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        {insight.insightType} • {insight.dataPoints} days
-                      </Typography>
-                    </Box>
-                  </Stack>
-                </Paper>
-              ))}
-            </Stack>
-          </Fade>
+                        {getInsightIcon(insight)}
+                      </Box>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography
+                          variant="body2"
+                          sx={{
+                            fontWeight: 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                          }}
+                        >
+                          {insight.metricY
+                            ? `${insight.metricX} ↔ ${insight.metricY}`
+                            : insight.metricX}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {insight.insightType} • {insight.dataPoints} days
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Fade>
+            {totalInsightPages > 1 && (
+              <Stack
+                direction="row"
+                justifyContent="center"
+                alignItems="center"
+                spacing={1}
+                sx={{ mt: 1.5 }}
+              >
+                <IconButton
+                  size="small"
+                  onClick={() => setInsightsPage((p) => Math.max(0, p - 1))}
+                  disabled={validInsightsPage === 0}
+                >
+                  <ChevronLeftIcon />
+                </IconButton>
+                <Typography variant="caption" color="text.secondary">
+                  {validInsightsPage + 1} / {totalInsightPages}
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() =>
+                    setInsightsPage((p) =>
+                      Math.min(totalInsightPages - 1, p + 1)
+                    )
+                  }
+                  disabled={validInsightsPage >= totalInsightPages - 1}
+                >
+                  <ChevronRightIcon />
+                </IconButton>
+              </Stack>
+            )}
+          </>
         )}
 
         <Divider sx={{ my: 2 }} />
@@ -1458,7 +1507,7 @@ export default function Insights() {
     switch (selection.type) {
       case "insight":
         return selection.insight.metricY
-          ? `${selection.insight.metricX} <-> ${selection.insight.metricY}`
+          ? `${selection.insight.metricX} ↔ ${selection.insight.metricY}`
           : selection.insight.metricX;
       case "metric": {
         const metric = metricTypes.find(

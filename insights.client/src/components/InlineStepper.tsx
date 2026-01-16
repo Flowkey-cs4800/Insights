@@ -27,21 +27,26 @@ function clamp(v: number, min: number, max?: number) {
   return typeof max === "number" ? Math.min(max, x) : x;
 }
 
-// Acceleration profile (tweak freely)
+// Acceleration profile for desktop hold (tweak freely)
 function stepForHeldMs(ms: number) {
-  if (ms < 400) return 1;
-  if (ms < 900) return 1;
-  if (ms < 1400) return 2;
-  if (ms < 2200) return 5;
+  if (ms < 500) return 1;
+  if (ms < 1000) return 1;
+  if (ms < 1500) return 2;
+  if (ms < 2500) return 5;
   return 10;
 }
+
 function intervalForHeldMs(ms: number) {
-  if (ms < 400) return 160;
-  if (ms < 900) return 120;
-  if (ms < 1400) return 90;
-  if (ms < 2200) return 70;
-  return 55;
+  if (ms < 500) return 180;
+  if (ms < 1000) return 140;
+  if (ms < 1500) return 100;
+  if (ms < 2500) return 80;
+  return 60;
 }
+
+// Detect touch device
+const isTouchDevice = () =>
+  "ontouchstart" in window || navigator.maxTouchPoints > 0;
 
 export default function InlineStepper({
   value,
@@ -53,34 +58,31 @@ export default function InlineStepper({
   label,
   size = "normal",
 }: Props) {
-  const [draft, setDraft] = useState<string>(String(value));
-  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<string | null>(null);
+  const isEditing = draft !== null;
 
-  // keep draft in sync when not actively editing
-  useEffect(() => {
-    if (!isEditing) setDraft(String(value));
-  }, [value, isEditing]);
+  const displayValue = isEditing ? draft : String(value);
 
   const holdRef = useRef<{
     direction: 1 | -1;
     startTs: number;
     timer: number | null;
     active: boolean;
+    didNudge: boolean;
   } | null>(null);
 
   const density = size === "compact" ? "small" : "medium";
   const inputWidth = size === "compact" ? 72 : 88;
 
   const commitDraft = async () => {
+    if (draft === null) return;
     const n = Number(draft);
     if (!Number.isFinite(n)) {
-      setDraft(String(value));
-      setIsEditing(false);
+      setDraft(null);
       return;
     }
     const next = clamp(Math.floor(n), min, max);
-    setIsEditing(false);
-    setDraft(String(next));
+    setDraft(null);
     if (next !== value) await onChange(next);
   };
 
@@ -99,8 +101,9 @@ export default function InlineStepper({
     }
   };
 
+  // Desktop only: hold to accelerate
   const startHold = (direction: 1 | -1) => {
-    if (disabled) return;
+    if (disabled || isTouchDevice()) return;
 
     stopHold();
 
@@ -109,11 +112,13 @@ export default function InlineStepper({
       startTs: performance.now(),
       timer: null as number | null,
       active: true,
+      didNudge: false,
     };
     holdRef.current = h;
 
-    // Immediate first step (feels responsive)
+    // Immediate first step
     void nudge(direction);
+    h.didNudge = true;
 
     const tick = async () => {
       if (!holdRef.current?.active) return;
@@ -128,21 +133,26 @@ export default function InlineStepper({
       }, interval);
     };
 
-    // small delay before repeating
+    // Delay before repeating
     h.timer = window.setTimeout(() => {
       void tick();
-    }, 220);
+    }, 300);
+  };
+
+  // Simple click handler for both desktop and mobile
+  const handleClick = (direction: 1 | -1) => {
+    // On desktop, mousedown already handled it via startHold
+    if (!isTouchDevice() && holdRef.current?.didNudge) {
+      return;
+    }
+    void nudge(direction);
   };
 
   useEffect(() => {
     const onUp = () => stopHold();
     window.addEventListener("mouseup", onUp);
-    window.addEventListener("touchend", onUp);
-    window.addEventListener("touchcancel", onUp);
     return () => {
       window.removeEventListener("mouseup", onUp);
-      window.removeEventListener("touchend", onUp);
-      window.removeEventListener("touchcancel", onUp);
     };
   }, []);
 
@@ -154,7 +164,11 @@ export default function InlineStepper({
   return (
     <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
       {label ? (
-        <Typography variant="caption" color="text.secondary" sx={{ minWidth: 70 }}>
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          sx={{ minWidth: 70 }}
+        >
           {label}
         </Typography>
       ) : null}
@@ -165,13 +179,9 @@ export default function InlineStepper({
             size={density}
             disabled={disabled || value <= min}
             onMouseDown={() => startHold(-1)}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              startHold(-1);
-            }}
             onMouseUp={stopHold}
             onMouseLeave={stopHold}
-            onTouchEnd={stopHold}
+            onClick={() => handleClick(-1)}
             aria-label="decrease"
           >
             <RemoveIcon />
@@ -180,8 +190,8 @@ export default function InlineStepper({
       </Tooltip>
 
       <TextField
-        value={draft}
-        onFocus={() => setIsEditing(true)}
+        value={displayValue}
+        onFocus={() => setDraft(String(value))}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={() => void commitDraft()}
         onKeyDown={(e) => {
@@ -189,8 +199,7 @@ export default function InlineStepper({
             (e.target as HTMLInputElement).blur();
           }
           if (e.key === "Escape") {
-            setDraft(String(value));
-            setIsEditing(false);
+            setDraft(null);
             (e.target as HTMLInputElement).blur();
           }
         }}
@@ -200,7 +209,7 @@ export default function InlineStepper({
           width: inputWidth,
           "& .MuiInputBase-input": {
             textAlign: "center",
-            fontWeight: 900,
+            fontWeight: 600,
           },
         }}
         helperText={helper}
@@ -213,13 +222,9 @@ export default function InlineStepper({
             size={density}
             disabled={disabled || (typeof max === "number" && value >= max)}
             onMouseDown={() => startHold(+1)}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              startHold(+1);
-            }}
             onMouseUp={stopHold}
             onMouseLeave={stopHold}
-            onTouchEnd={stopHold}
+            onClick={() => handleClick(+1)}
             aria-label="increase"
           >
             <AddIcon />

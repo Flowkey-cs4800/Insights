@@ -53,21 +53,6 @@ export interface ComparisonData {
   unit: string | null;
 }
 
-export interface StreakData {
-  currentStreak: number;
-  maxStreak: number;
-  streakStartDate: string | null;
-  daysUntilRecord: number;
-}
-
-export interface ConsistencyData {
-  daysLogged: number;
-  totalDays: number;
-  percentage: number;
-  loggedDays: string[];
-  previousWeekCount: number | null;
-}
-
 export interface InsightItem {
   metricTypeIdX: string;
   metricTypeIdY: string | null;
@@ -78,17 +63,14 @@ export interface InsightItem {
   strength: number;
   direction: "positive" | "negative" | "neutral";
   summary: string;
-  detailedExplanation: string | null;
   dataPoints: number;
-  insightType: "correlation" | "streak" | "consistency";
+  insightType: "correlation" | "streak" | "consistency" | "average";
   comparisonType:
     | "boolean_boolean"
     | "boolean_numeric"
     | "numeric_numeric"
     | null;
   comparisonData: ComparisonData | null;
-  streakData: StreakData | null;
-  consistencyData: ConsistencyData | null;
   scatterData: ComparePoint[] | null;
 }
 

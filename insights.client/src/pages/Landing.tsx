@@ -78,14 +78,14 @@ export default function Landing() {
           </Box>
 
           <Typography
-            variant="h3"
+            variant="h1"
             sx={{
-              letterSpacing: "-1px",
-              mb: 0.75,
-              fontSize: { xs: "1.75rem", sm: "2.25rem", md: "2.5rem" },
+              letterSpacing: "-2px",
+              mb: 0.5,
+              fontSize: { xs: "2.5rem", sm: "3.5rem", md: "4rem" },
             }}
           >
-            manage what you measure
+            INSIGHTS
           </Typography>
 
           <Typography
@@ -93,7 +93,7 @@ export default function Landing() {
             color="text.secondary"
             sx={{ mb: 3, fontSize: { xs: "1rem", md: "1.1rem" } }}
           >
-            track your habits. find the patterns.
+            manage what you measure
           </Typography>
 
           {/* Big CTA Button */}
@@ -257,7 +257,7 @@ export default function Landing() {
             fontStyle: "italic",
           }}
         >
-          sleep &middot; mood &middot; caffeine &middot; exercise &middot;
+          sunlight &middot; focus &middot; walks &middot; ideas &middot;
           whatever you want
         </Typography>
       </Container>

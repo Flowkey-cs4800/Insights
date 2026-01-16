@@ -14,7 +14,6 @@ import {
   IconButton,
   MenuItem,
   Paper,
-  Skeleton,
   Snackbar,
   Stack,
   Tab,
@@ -406,7 +405,7 @@ export default function MetricView() {
       kind: mt.kind,
       unit: mt.unit ?? "",
       hasGoal: (mt.goalValue ?? 0) > 0,
-      goalCadence: mt.goalCadence ?? "Weekly",
+      goalCadence: mt.goalCadence ?? 1,
       goalValue: String(mt.goalValue ?? 0) || "5",
       goalDays: mt.goalDays ?? 127,
     });
@@ -544,15 +543,34 @@ export default function MetricView() {
         </Stack>
 
         {tab === "types" && (
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<AddIcon />}
-            sx={{ textTransform: "none", borderRadius: 2, fontWeight: 500 }}
-            onClick={openCreate}
-          >
-            New metric
-          </Button>
+          <>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<AddIcon />}
+              sx={{
+                display: { xs: "none", sm: "inline-flex" },
+                textTransform: "none",
+                borderRadius: 2,
+                fontWeight: 600,
+              }}
+              onClick={openCreate}
+            >
+              New metric
+            </Button>
+            <IconButton
+              color="primary"
+              onClick={openCreate}
+              sx={{
+                display: { xs: "inline-flex", sm: "none" },
+                bgcolor: "primary.main",
+                color: "white",
+                "&:hover": { bgcolor: "primary.dark" },
+              }}
+            >
+              <AddIcon />
+            </IconButton>
+          </>
         )}
       </Stack>
 
@@ -570,12 +588,12 @@ export default function MetricView() {
           <Tab
             label="Types"
             value="types"
-            sx={{ textTransform: "none", fontWeight: 500 }}
+            sx={{ textTransform: "none", fontWeight: 700 }}
           />
           <Tab
             label="History"
             value="history"
-            sx={{ textTransform: "none", fontWeight: 500 }}
+            sx={{ textTransform: "none", fontWeight: 700 }}
           />
         </Tabs>
 
@@ -583,11 +601,7 @@ export default function MetricView() {
           {tab === "types" ? (
             <>
               {loading ? (
-                <Stack spacing={1}>
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} variant="rounded" height={64} />
-                  ))}
-                </Stack>
+                <Typography color="text.secondary">Loadingâ€¦</Typography>
               ) : metricTypes.length === 0 ? (
                 <Typography color="text.secondary">
                   No metric types yet. Create one.
@@ -730,22 +744,7 @@ export default function MetricView() {
               <Divider sx={{ mb: 2 }} />
 
               {historyLoading ? (
-                <Stack spacing={2}>
-                  {[1, 2, 3].map((i) => (
-                    <Box key={i}>
-                      <Skeleton
-                        variant="text"
-                        width={150}
-                        height={24}
-                        sx={{ mb: 1 }}
-                      />
-                      <Stack spacing={0.75}>
-                        <Skeleton variant="rounded" height={52} />
-                        <Skeleton variant="rounded" height={52} />
-                      </Stack>
-                    </Box>
-                  ))}
-                </Stack>
+                <Typography color="text.secondary">Loadingâ€¦</Typography>
               ) : groupedByDate.length === 0 ? (
                 <Paper
                   variant="outlined"
@@ -795,7 +794,7 @@ export default function MetricView() {
                           >
                             <Typography
                               variant="subtitle2"
-                              sx={{ fontWeight: 500 }}
+                              sx={{ fontWeight: 700 }}
                             >
                               {formattedDate}
                             </Typography>
@@ -837,7 +836,7 @@ export default function MetricView() {
                                     <Box>
                                       <Typography
                                         variant="body2"
-                                        sx={{ fontWeight: 500 }}
+                                        sx={{ fontWeight: 700 }}
                                       >
                                         {entry.metricTypeName}
                                       </Typography>
@@ -939,7 +938,16 @@ export default function MetricView() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>Create metric type</DialogTitle>
+        <DialogTitle>
+          New metric
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontWeight: 400 }}
+          >
+            Track anything — we'll find the patterns
+          </Typography>
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
@@ -967,7 +975,7 @@ export default function MetricView() {
             >
               <MenuItem value="Boolean">Boolean (yes / no)</MenuItem>
               <MenuItem value="Number">Number (count / score)</MenuItem>
-              <MenuItem value="Duration">Duration (time)</MenuItem>
+              <MenuItem value="Duration">Duration (minutes)</MenuItem>
             </TextField>
 
             {createState.kind !== "Boolean" && (
@@ -1110,13 +1118,18 @@ export default function MetricView() {
               label="Kind"
               select
               value={editState.kind}
-              disabled
+              onChange={(e) =>
+                setEditState((s) => ({
+                  ...s,
+                  kind: e.target.value as EditState["kind"],
+                  unit: e.target.value === "Boolean" ? "" : s.unit,
+                }))
+              }
               fullWidth
-              helperText="To change kind, delete and recreate the metric"
             >
               <MenuItem value="Boolean">Boolean (yes / no)</MenuItem>
               <MenuItem value="Number">Number (count / score)</MenuItem>
-              <MenuItem value="Duration">Duration (time)</MenuItem>
+              <MenuItem value="Duration">Duration (minutes)</MenuItem>
             </TextField>
 
             {editState.kind !== "Boolean" && (
@@ -1178,7 +1191,7 @@ export default function MetricView() {
                   inputMode="numeric"
                   helperText={
                     editState.kind === "Boolean"
-                      ? "Boolean goals are clamped: Daily <= 1, Weekly <= 7."
+                      ? "Boolean goals are clamped: Daily â‰¤ 1, Weekly â‰¤ 7."
                       : "Numeric target for the selected cadence."
                   }
                 />

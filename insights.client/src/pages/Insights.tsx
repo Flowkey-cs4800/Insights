@@ -349,116 +349,6 @@ export default function Insights() {
               {insight.summary}
             </Typography>
           </Box>
-
-          {/* Detailed explanation */}
-          {insight.detailedExplanation && (
-            <Paper
-              elevation={0}
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                bgcolor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
-              }}
-            >
-              <Typography variant="body2" color="text.secondary">
-                {insight.detailedExplanation}
-              </Typography>
-            </Paper>
-          )}
-
-          {/* Extra data for streaks */}
-          {insight.streakData && (
-            <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: isDark
-                    ? "rgba(255,255,255,0.05)"
-                    : "rgba(0,0,0,0.03)",
-                  flex: 1,
-                  textAlign: "center",
-                }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  Personal Best
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {insight.streakData.maxStreak} days
-                </Typography>
-              </Paper>
-              {insight.streakData.daysUntilRecord > 0 && (
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(0,0,0,0.03)",
-                    flex: 1,
-                    textAlign: "center",
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    To Beat Record
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    {insight.streakData.daysUntilRecord} more
-                  </Typography>
-                </Paper>
-              )}
-            </Stack>
-          )}
-
-          {/* Extra data for consistency */}
-          {insight.consistencyData && (
-            <Stack direction="row" spacing={2} sx={{ mt: 2 }}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  bgcolor: isDark
-                    ? "rgba(255,255,255,0.05)"
-                    : "rgba(0,0,0,0.03)",
-                  flex: 1,
-                  textAlign: "center",
-                }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  This Week
-                </Typography>
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  {insight.consistencyData.daysLogged}/
-                  {insight.consistencyData.totalDays}
-                </Typography>
-              </Paper>
-              {insight.consistencyData.previousWeekCount !== null && (
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: isDark
-                      ? "rgba(255,255,255,0.05)"
-                      : "rgba(0,0,0,0.03)",
-                    flex: 1,
-                    textAlign: "center",
-                  }}
-                >
-                  <Typography variant="caption" color="text.secondary">
-                    Last Week
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    {insight.consistencyData.previousWeekCount}/
-                    {insight.consistencyData.totalDays}
-                  </Typography>
-                </Paper>
-              )}
-            </Stack>
-          )}
         </Box>
       );
     }
@@ -496,12 +386,6 @@ export default function Insights() {
           <Typography variant="body1" sx={{ fontWeight: 600 }}>
             {insight.summary}
           </Typography>
-          {/* Detailed explanation */}
-          {insight.detailedExplanation && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-              {insight.detailedExplanation}
-            </Typography>
-          )}
         </Box>
 
         {/* Bar Chart - Comparison */}
@@ -1346,220 +1230,227 @@ export default function Insights() {
   };
 
   // Left panel content (list view)
-  const renderListPanel = () => (
-    <Stack spacing={0}>
-      {/* Custom Compare */}
-      <Paper
-        variant="outlined"
-        onClick={handleSelectCustom}
-        sx={{
-          p: 1.5,
-          borderRadius: 2,
-          cursor: "pointer",
-          borderColor:
-            selection?.type === "custom" ? "primary.main" : "divider",
-          borderWidth: selection?.type === "custom" ? 2 : 1,
-          bgcolor:
-            selection?.type === "custom" ? "action.selected" : "transparent",
-          "&:hover": { bgcolor: "action.hover" },
-        }}
-      >
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: 1.5,
-              display: "grid",
-              placeItems: "center",
-              bgcolor: "secondary.main",
-              color: "white",
-              flexShrink: 0,
-            }}
-          >
-            <CompareArrowsIcon />
-          </Box>
-          <Box>
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              Custom Compare
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Compare any two metrics
-            </Typography>
-          </Box>
-        </Stack>
-      </Paper>
+  const renderListPanel = () => {
+    const canCompare = metricTypes.length >= 2;
 
-      <Divider sx={{ my: 2 }} />
-
-      {showSkeleton ? (
-        <Stack spacing={1}>
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} variant="rounded" height={72} />
-          ))}
-        </Stack>
-      ) : loading ? null : insights.length === 0 ? (
-        <Fade in timeout={300}>
-          <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
-            <Typography variant="body2">No insights yet</Typography>
-            <Typography variant="caption">
-              Log more data to discover patterns
-            </Typography>
-          </Box>
-        </Fade>
-      ) : (
-        <Fade
-          in
-          timeout={300}
-          key={insights.map((i) => i.metricTypeIdX).join("-")}
+    return (
+      <Stack spacing={0}>
+        {/* Custom Compare */}
+        <Paper
+          variant="outlined"
+          onClick={canCompare ? handleSelectCustom : undefined}
+          sx={{
+            p: 1.5,
+            borderRadius: 2,
+            cursor: canCompare ? "pointer" : "default",
+            borderColor:
+              selection?.type === "custom" ? "primary.main" : "divider",
+            borderWidth: selection?.type === "custom" ? 2 : 1,
+            bgcolor:
+              selection?.type === "custom" ? "action.selected" : "transparent",
+            opacity: canCompare ? 1 : 0.5,
+            "&:hover": canCompare ? { bgcolor: "action.hover" } : {},
+          }}
         >
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: 1.5,
+                display: "grid",
+                placeItems: "center",
+                bgcolor: "secondary.main",
+                color: "white",
+                flexShrink: 0,
+              }}
+            >
+              <CompareArrowsIcon />
+            </Box>
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Custom Compare
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {canCompare
+                  ? "Compare any two metrics"
+                  : "Need 2+ metrics to compare"}
+              </Typography>
+            </Box>
+          </Stack>
+        </Paper>
+
+        <Divider sx={{ my: 2 }} />
+
+        {showSkeleton ? (
           <Stack spacing={1}>
-            {insights.map((insight, idx) => (
-              <Paper
-                key={`${insight.metricTypeIdX}-${
-                  insight.metricTypeIdY ?? "single"
-                }-${idx}`}
-                variant="outlined"
-                onClick={() => handleSelectInsight(insight)}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  cursor: "pointer",
-                  borderColor: isInsightSelected(insight)
-                    ? "primary.main"
-                    : "divider",
-                  borderWidth: isInsightSelected(insight) ? 2 : 1,
-                  bgcolor: isInsightSelected(insight)
-                    ? "action.selected"
-                    : "transparent",
-                  transition: "all 0.2s ease-in-out",
-                  "&:hover": { bgcolor: "action.hover" },
-                }}
-              >
-                <Stack direction="row" spacing={1.5} alignItems="flex-start">
-                  <Box
-                    sx={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 1.5,
-                      display: "grid",
-                      placeItems: "center",
-                      bgcolor: getInsightColor(insight),
-                      color: "white",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {getInsightIcon(insight)}
-                  </Box>
-                  <Box sx={{ minWidth: 0 }}>
-                    <Typography
-                      variant="body2"
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} variant="rounded" height={72} />
+            ))}
+          </Stack>
+        ) : loading ? null : insights.length === 0 ? (
+          <Fade in timeout={300}>
+            <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
+              <Typography variant="body2">No insights yet</Typography>
+              <Typography variant="caption">
+                Log more data to discover patterns
+              </Typography>
+            </Box>
+          </Fade>
+        ) : (
+          <Fade
+            in
+            timeout={300}
+            key={insights.map((i) => i.metricTypeIdX).join("-")}
+          >
+            <Stack spacing={1}>
+              {insights.map((insight, idx) => (
+                <Paper
+                  key={`${insight.metricTypeIdX}-${
+                    insight.metricTypeIdY ?? "single"
+                  }-${idx}`}
+                  variant="outlined"
+                  onClick={() => handleSelectInsight(insight)}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    borderColor: isInsightSelected(insight)
+                      ? "primary.main"
+                      : "divider",
+                    borderWidth: isInsightSelected(insight) ? 2 : 1,
+                    bgcolor: isInsightSelected(insight)
+                      ? "action.selected"
+                      : "transparent",
+                    transition: "all 0.2s ease-in-out",
+                    "&:hover": { bgcolor: "action.hover" },
+                  }}
+                >
+                  <Stack direction="row" spacing={1.5} alignItems="flex-start">
+                    <Box
                       sx={{
-                        fontWeight: 500,
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        display: "-webkit-box",
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: "vertical",
+                        width: 36,
+                        height: 36,
+                        borderRadius: 1.5,
+                        display: "grid",
+                        placeItems: "center",
+                        bgcolor: getInsightColor(insight),
+                        color: "white",
+                        flexShrink: 0,
                       }}
                     >
-                      {insight.metricY
-                        ? `${insight.metricX} <-> ${insight.metricY}`
-                        : insight.metricX}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {insight.insightType} • {insight.dataPoints} days
-                    </Typography>
-                  </Box>
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
-        </Fade>
-      )}
-
-      <Divider sx={{ my: 2 }} />
-
-      {/* Individual Metrics */}
-      {metricTypes.length === 0 ? (
-        <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
-          <Typography variant="body2">No metrics yet</Typography>
-        </Box>
-      ) : (
-        <>
-          <Stack spacing={1}>
-            {paginatedMetrics.map((metric) => (
-              <Paper
-                key={metric.metricTypeId}
-                variant="outlined"
-                onClick={() => handleSelectMetric(metric.metricTypeId)}
-                sx={{
-                  p: 1.5,
-                  borderRadius: 2,
-                  cursor: "pointer",
-                  borderColor: isMetricSelected(metric.metricTypeId)
-                    ? "primary.main"
-                    : "divider",
-                  borderWidth: isMetricSelected(metric.metricTypeId) ? 2 : 1,
-                  bgcolor: isMetricSelected(metric.metricTypeId)
-                    ? "action.selected"
-                    : "transparent",
-                  "&:hover": { bgcolor: "action.hover" },
-                }}
-              >
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {metric.name}
-                </Typography>
-                <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
-                  <Chip
-                    size="small"
-                    label={metric.kind}
-                    sx={{ height: 20, fontSize: 10 }}
-                  />
-                  {metric.unit && (
-                    <Typography variant="caption" color="text.secondary">
-                      {metric.unit}
-                    </Typography>
-                  )}
-                </Stack>
-              </Paper>
-            ))}
-          </Stack>
-
-          {/* Pagination */}
-          {totalMetricPages > 1 && (
-            <Stack
-              direction="row"
-              justifyContent="center"
-              alignItems="center"
-              spacing={1}
-              sx={{ mt: 2 }}
-            >
-              <IconButton
-                size="small"
-                onClick={() => setMetricsPage((p) => Math.max(0, p - 1))}
-                disabled={validMetricsPage === 0}
-              >
-                <ChevronLeftIcon />
-              </IconButton>
-              <Typography variant="caption" color="text.secondary">
-                {validMetricsPage + 1} / {totalMetricPages}
-              </Typography>
-              <IconButton
-                size="small"
-                onClick={() =>
-                  setMetricsPage((p) => Math.min(totalMetricPages - 1, p + 1))
-                }
-                disabled={validMetricsPage >= totalMetricPages - 1}
-              >
-                <ChevronRightIcon />
-              </IconButton>
+                      {getInsightIcon(insight)}
+                    </Box>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontWeight: 500,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                        }}
+                      >
+                        {insight.metricY
+                          ? `${insight.metricX} <-> ${insight.metricY}`
+                          : insight.metricX}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {insight.insightType} • {insight.dataPoints} days
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Paper>
+              ))}
             </Stack>
-          )}
-        </>
-      )}
-    </Stack>
-  );
+          </Fade>
+        )}
+
+        <Divider sx={{ my: 2 }} />
+
+        {/* Individual Metrics */}
+        {metricTypes.length === 0 ? (
+          <Box sx={{ textAlign: "center", py: 2, color: "text.secondary" }}>
+            <Typography variant="body2">No metrics yet</Typography>
+          </Box>
+        ) : (
+          <>
+            <Stack spacing={1}>
+              {paginatedMetrics.map((metric) => (
+                <Paper
+                  key={metric.metricTypeId}
+                  variant="outlined"
+                  onClick={() => handleSelectMetric(metric.metricTypeId)}
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 2,
+                    cursor: "pointer",
+                    borderColor: isMetricSelected(metric.metricTypeId)
+                      ? "primary.main"
+                      : "divider",
+                    borderWidth: isMetricSelected(metric.metricTypeId) ? 2 : 1,
+                    bgcolor: isMetricSelected(metric.metricTypeId)
+                      ? "action.selected"
+                      : "transparent",
+                    "&:hover": { bgcolor: "action.hover" },
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    {metric.name}
+                  </Typography>
+                  <Stack direction="row" spacing={1} sx={{ mt: 0.5 }}>
+                    <Chip
+                      size="small"
+                      label={metric.kind}
+                      sx={{ height: 20, fontSize: 10 }}
+                    />
+                    {metric.unit && (
+                      <Typography variant="caption" color="text.secondary">
+                        {metric.unit}
+                      </Typography>
+                    )}
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+
+            {/* Pagination */}
+            {totalMetricPages > 1 && (
+              <Stack
+                direction="row"
+                justifyContent="center"
+                alignItems="center"
+                spacing={1}
+                sx={{ mt: 2 }}
+              >
+                <IconButton
+                  size="small"
+                  onClick={() => setMetricsPage((p) => Math.max(0, p - 1))}
+                  disabled={validMetricsPage === 0}
+                >
+                  <ChevronLeftIcon />
+                </IconButton>
+                <Typography variant="caption" color="text.secondary">
+                  {validMetricsPage + 1} / {totalMetricPages}
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() =>
+                    setMetricsPage((p) => Math.min(totalMetricPages - 1, p + 1))
+                  }
+                  disabled={validMetricsPage >= totalMetricPages - 1}
+                >
+                  <ChevronRightIcon />
+                </IconButton>
+              </Stack>
+            )}
+          </>
+        )}
+      </Stack>
+    );
+  };
 
   // Mobile detail view header
   const getMobileDetailTitle = () => {

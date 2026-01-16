@@ -414,6 +414,10 @@ export default function Home() {
     setErr(null);
 
     const existing = metricByTypeAndDate.get(key);
+    const isTemp = existing?.metricId.startsWith("temp-");
+
+    // If we're already waiting on a temp entry, ignore rapid clicks
+    if (isTemp) return;
 
     // Optimistic update
     if (existing) {
@@ -429,7 +433,7 @@ export default function Home() {
     }
 
     // Server update
-    if (existing) {
+    if (existing && !isTemp) {
       const res = await updateMetric(existing.metricId, nextValue);
       if (!res.success) {
         upsertMetricInState(existing); // rollback
@@ -762,7 +766,7 @@ export default function Home() {
                         Log today
                       </Typography>
                       <Typography variant="body2" color="text.secondary">
-                        Check off habits and record values
+                        Check off metrics you've completed today
                       </Typography>
                     </Box>
                     <Stack direction="row" alignItems="center" spacing={1}>
@@ -916,12 +920,16 @@ export default function Home() {
                     direction="row"
                     alignItems="center"
                     spacing={0.75}
-                    onClick={() => openLogDialog()}
+                    onClick={
+                      metricTypes.length > 0 ? () => openLogDialog() : undefined
+                    }
                     sx={{
                       mt: 2,
-                      cursor: "pointer",
+                      cursor: metricTypes.length > 0 ? "pointer" : "default",
                       color: "text.secondary",
-                      "&:hover": { color: "primary.main" },
+                      opacity: metricTypes.length > 0 ? 1 : 0.4,
+                      "&:hover":
+                        metricTypes.length > 0 ? { color: "primary.main" } : {},
                     }}
                   >
                     <HistoryIcon fontSize="small" />
@@ -1167,7 +1175,16 @@ export default function Home() {
         maxWidth="xs"
         fullWidth
       >
-        <DialogTitle>New metric</DialogTitle>
+        <DialogTitle>
+          New metric
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ fontWeight: 400 }}
+          >
+            Track anything — we'll find the patterns
+          </Typography>
+        </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField

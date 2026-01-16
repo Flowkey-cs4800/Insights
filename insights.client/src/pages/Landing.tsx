@@ -53,14 +53,14 @@ export default function Landing() {
         <Box
           sx={{
             textAlign: "center",
-            pt: { xs: 4, md: 5 },
-            pb: { xs: 3, md: 4 },
+            pt: { xs: 2, md: 5 },
+            pb: { xs: 2, md: 4 },
           }}
         >
           {/* Glowing Logo */}
           <Box
             sx={{
-              mb: 2,
+              mb: { xs: 1, md: 2 },
               display: "flex",
               justifyContent: "center",
             }}
@@ -70,7 +70,7 @@ export default function Landing() {
               src="/logo.png"
               alt="Insights"
               sx={{
-                height: { xs: 56, md: 64 },
+                height: { xs: 48, md: 64 },
                 width: "auto",
                 animation: `${glowPulse} 3s ease-in-out infinite`,
               }}
@@ -82,7 +82,7 @@ export default function Landing() {
             sx={{
               letterSpacing: "-2px",
               mb: 0.5,
-              fontSize: { xs: "2.5rem", sm: "3.5rem", md: "4rem" },
+              fontSize: { xs: "2rem", sm: "3rem", md: "4rem" },
             }}
           >
             INSIGHTS
@@ -91,7 +91,10 @@ export default function Landing() {
           <Typography
             variant="body1"
             color="text.secondary"
-            sx={{ mb: 3, fontSize: { xs: "1rem", md: "1.1rem" } }}
+            sx={{
+              mb: { xs: 2, md: 3 },
+              fontSize: { xs: "1rem", md: "1.1rem" },
+            }}
           >
             manage what you measure
           </Typography>
@@ -111,12 +114,12 @@ export default function Landing() {
             }
             sx={(theme) => ({
               textTransform: "none",
-              px: 4,
-              py: 1.5,
+              px: { xs: 3, md: 4 },
+              py: { xs: 1.25, md: 1.5 },
               borderRadius: 3,
-              fontSize: "1rem",
+              fontSize: { xs: "0.9rem", md: "1rem" },
               fontWeight: 600,
-              minWidth: 220,
+              minWidth: { xs: 200, md: 220 },
               boxShadow: `0 4px 14px 0 ${alpha(
                 theme.palette.primary.main,
                 0.35
@@ -182,7 +185,7 @@ export default function Landing() {
           </Box>
 
           {/* Content area - shows example insight */}
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: { xs: 1.5, md: 2 } }}>
             {/* Example insight card */}
             <Paper
               variant="outlined"
@@ -252,8 +255,8 @@ export default function Landing() {
           color="text.secondary"
           sx={{
             textAlign: "center",
-            mt: 3,
-            mb: 1.5,
+            mt: { xs: 2, md: 3 },
+            mb: 1,
             fontStyle: "italic",
           }}
         >
@@ -266,7 +269,7 @@ export default function Landing() {
       <Box
         component="footer"
         sx={{
-          py: 2,
+          py: { xs: 1.5, md: 2 },
           textAlign: "center",
         }}
       >

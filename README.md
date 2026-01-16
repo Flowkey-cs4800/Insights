@@ -4,7 +4,8 @@
 
 A personal metrics tracker that automatically discovers correlations between the things you log. Sleep more → better mood? Coffee → more focus? Insights finds these patterns for you.
 
-🔗 **Live:** https://insights-app-kj9l.onrender.com
+🔗 **Live:** https://insights-app-kj9l.onrender.com  
+📖 **API Docs:** https://insights-app-kj9l.onrender.com/scalar/v1
 
 ## How it works
 

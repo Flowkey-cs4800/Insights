@@ -25,17 +25,7 @@ jobs:
           rules_file_name: ".zap/rules.tsv"
           cmd_options: "-a -j -l WARN"
           allow_issue_writing: false
-
-      - name: Upload ZAP Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: zap-scan-results
-          path: |
-            report_html.html
-            report_json.json
-            report_md.md
-          retention-days: 30
+          artifact_name: zap-baseline-results
 
   zap-api-scan:
     name: ZAP API Scan
@@ -53,14 +43,4 @@ jobs:
           rules_file_name: ".zap/rules.tsv"
           cmd_options: "-a -j -l WARN"
           allow_issue_writing: false
-
-      - name: Upload API Scan Report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: zap-api-scan-results
-          path: |
-            report_html.html
-            report_json.json
-            report_md.md
-          retention-days: 30
+          artifact_name: zap-api-results

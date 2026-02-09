@@ -162,7 +162,7 @@ export default function Landing() {
                 maxWidth: 480,
               }}
             >
-              Log your habits. Insights finds the connections you'd miss — which
+              Log your habits. Insights finds the connections you'd miss, which
               routines lift your mood, what actually helps you focus, where the
               patterns are hiding.
             </Typography>

@@ -51,8 +51,8 @@ builder.Services.AddAuthentication(options =>
     options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Events.OnRedirectToAuthorizationEndpoint = context =>
     {
-        // API requests should get 401, not a redirect to Google OAuth
-        if (context.Request.Path.StartsWithSegments("/api"))
+        if (context.Request.Path.StartsWithSegments("/api") 
+            && !context.Request.Path.StartsWithSegments("/api/auth/login"))
         {
             context.Response.StatusCode = 401;
             return Task.CompletedTask;

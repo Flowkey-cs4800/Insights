@@ -11,11 +11,28 @@ import AppLayout from "./layout/AppLayout";
 
 function AuthCallback() {
   useEffect(() => {
-    window.opener?.postMessage(
-      { type: "auth-success" },
-      window.location.origin
-    );
+    try {
+      const bc = new BroadcastChannel("auth");
+      bc.postMessage({ type: "auth-success" });
+      bc.close();
+    } catch {
+      // BroadcastChannel not supported, fall through to other methods
+    }
+
+    try {
+      window.opener?.postMessage(
+        { type: "auth-success" },
+        window.location.origin,
+      );
+    } catch {
+      // window.opener severed by COOP, handled by BroadcastChannel
+    }
+
     window.close();
+
+    setTimeout(() => {
+      window.location.href = "/dashboard";
+    }, 500);
   }, []);
   return <div>Signing in...</div>;
 }

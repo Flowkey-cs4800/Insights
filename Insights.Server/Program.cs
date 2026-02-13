@@ -89,7 +89,7 @@ app.Use(async (context, next) =>
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
     context.Response.Headers.Append("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     context.Response.Headers.Append("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-    context.Response.Headers.Append("Cross-Origin-Opener-Policy", "same-origin");
+    context.Response.Headers.Append("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
     context.Response.Headers.Append("Cross-Origin-Resource-Policy", "same-origin");
     await next();
 });

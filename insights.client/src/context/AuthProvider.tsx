@@ -51,7 +51,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+
+    // BroadcastChannel fallback for when window.opener is severed
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel("auth");
+      bc.onmessage = (event) => {
+        if (event.data?.type === "auth-success") {
+          refreshUser();
+        }
+      };
+    } catch {
+      // BroadcastChannel not supported, rely on postMessage and focus listeners
+    }
+
+    // Also re-check auth when window regains focus (covers all edge cases)
+    const handleFocus = () => refreshUser();
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      window.removeEventListener("focus", handleFocus);
+      bc?.close();
+    };
   }, []);
 
   return (
